@@ -598,6 +598,9 @@
                 </h1>
             </div>
             <div class="header-right">
+                <button class="pill-btn" onclick="manualRefreshData()" id="refresh-data-btn" title="立即同步最新实时流量">
+                    <span id="refresh-icon">🔄 刷新</span>
+                </button>
                 <button class="pill-btn" onclick="toggleTheme()" id="theme-btn" title="切换深色/浅色模式">
                     <span id="theme-icon">🌙</span>
                 </button>
@@ -1287,7 +1290,28 @@
             };
             document.getElementById('page-heading').innerHTML = headingMap[viewName] || '<span>🚀 Trojan 控制台</span>';
 
-            if (viewName === 'logs') initLogWebSocket();
+            if (viewName === 'dashboard') {
+                loadDashboard();
+                loadUsers();
+            } else if (viewName === 'users') {
+                loadUsers();
+            } else if (viewName === 'logs') {
+                initLogWebSocket();
+            }
+        }
+
+        // 手动立即刷新数据
+        async function manualRefreshData() {
+            const btn = document.getElementById('refresh-icon');
+            if (btn) btn.innerText = '⏳ 刷新中...';
+            try {
+                await Promise.all([loadUsers(), loadDashboard(), fetchServerRealtime()]);
+                showToast('已同步最新实时流量数据', '⚡');
+            } catch (e) {
+                showToast('刷新失败，请检查网络', '⚠️');
+            } finally {
+                if (btn) btn.innerText = '🔄 刷新';
+            }
         }
 
         // App 初始化

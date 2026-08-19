@@ -82,6 +82,8 @@ func GetGlobalDailyTraffic(days int) *ResponseBody {
 	responseBody := ResponseBody{Msg: "success"}
 	defer TimeCost(time.Now(), &responseBody)
 	mysql := core.GetMysql()
+	// 查询前即时计算并写入最新流量增量
+	_ = mysql.RecordTrafficSnapshot()
 	list, err := mysql.GetGlobalDailyTraffic(days)
 	if err != nil {
 		responseBody.Msg = err.Error()
@@ -95,6 +97,8 @@ func GetUserDailyTraffic(userID uint, days int) *ResponseBody {
 	responseBody := ResponseBody{Msg: "success"}
 	defer TimeCost(time.Now(), &responseBody)
 	mysql := core.GetMysql()
+	// 查询前即时计算并写入最新流量增量
+	_ = mysql.RecordTrafficSnapshot()
 	list, err := mysql.GetUserDailyTraffic(userID, days)
 	if err != nil {
 		responseBody.Msg = err.Error()
@@ -108,6 +112,8 @@ func GetTodayTopUsers() *ResponseBody {
 	responseBody := ResponseBody{Msg: "success"}
 	defer TimeCost(time.Now(), &responseBody)
 	mysql := core.GetMysql()
+	// 查询前即时计算并写入最新流量增量
+	_ = mysql.RecordTrafficSnapshot()
 	list, err := mysql.GetTodayTopUsers(5)
 	if err != nil {
 		responseBody.Msg = err.Error()
@@ -123,14 +129,14 @@ func ScheduleTask() {
 	
 	// 启动时立即执行一次流量快照
 	go func() {
-		time.Sleep(3 * time.Second)
+		time.Sleep(1 * time.Second)
 		mysql := core.GetMysql()
 		mysql.CreateTable()
 		mysql.RecordTrafficSnapshot()
 	}()
 
-	// 每 5 分钟采样一次每日流量增量
-	c.AddFunc("@every 5m", func() {
+	// 每 30 秒高频采样一次每日流量增量
+	c.AddFunc("@every 30s", func() {
 		mysql := core.GetMysql()
 		mysql.RecordTrafficSnapshot()
 	})
