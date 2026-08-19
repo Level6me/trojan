@@ -442,6 +442,46 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes scaleUp { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 
+        /* Switch Toggle (iOS 质感开关) */
+        .switch-toggle {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+        .switch-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .switch-toggle .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--border);
+            transition: .3s cubic-bezier(0.2, 0.9, 0.3, 1);
+            border-radius: 24px;
+        }
+        .switch-toggle .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s cubic-bezier(0.2, 0.9, 0.3, 1);
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .switch-toggle input:checked + .slider {
+            background-color: var(--accent) !important;
+        }
+        .switch-toggle input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+
         /* Floating Glass Dock (Abit 经典底栏) */
         .bottom-spacer { height: 75px; width: 100%; }
         .dock {
@@ -669,13 +709,16 @@
                             <div style="font-size: 18px; font-weight: 800; color: var(--success);" id="realtime-down">0.0 KB/s</div>
                         </div>
                     </div>
-                    <!-- TLS 证书与端口概要 -->
-                    <div style="background: var(--card-sec); border-radius: 12px; padding: 10px 14px; border: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                    <!-- TLS 证书与端口概要 (点击弹出证书详情卡片) -->
+                    <div style="background: var(--card-sec); border-radius: 12px; padding: 10px 14px; border: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: all 0.2s ease;" onclick="openCertDetailModal()" title="点击查看 TLS 证书详情与自动续签管理" onmouseover="this.style.borderColor='var(--accent)'; this.style.background='var(--card-hover)';" onmouseout="this.style.borderColor='var(--border-subtle)'; this.style.background='var(--card-sec)';">
                         <div style="min-width: 0;">
                             <div style="font-size: 12px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="cert-domain-label">🔒 域名证书: 检测中...</div>
                             <div style="font-size: 11px; color: var(--text-sec);" id="cert-expiry-label">颁发者: -- · 有效期: --</div>
                         </div>
-                        <span class="tag accent" id="node-port-badge">TCP 4212</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="tag accent" id="node-port-badge">TCP 4212</span>
+                            <span style="font-size: 13px; color: var(--text-sec); font-weight: 700;">›</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1099,6 +1142,83 @@
         </div>
     </div>
 
+    <!-- Modal 4: TLS 证书详情与自动续签管理 -->
+    <div class="modal-overlay" id="modal-cert-detail">
+        <div class="modal-sheet" style="max-width: 520px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">🔒</span>
+                    <h3 style="font-size: 16px; font-weight: 800;">TLS 证书详情与管理</h3>
+                </div>
+                <span class="tag success" id="cert-modal-status-badge">🟢 正常保护中</span>
+            </div>
+
+            <!-- 证书详情信息卡片网格 -->
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+                <div style="background: var(--card-sec); border-radius: 12px; padding: 12px 14px; border: 1px solid var(--border-subtle);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <span style="font-size: 11px; color: var(--text-sec); font-weight: 600;">绑定主域名</span>
+                        <span style="font-size: 11px; font-family: monospace; color: var(--accent); cursor: pointer;" onclick="copyText(document.getElementById('cert-modal-domain').innerText)">📋 复制</span>
+                    </div>
+                    <div style="font-size: 14px; font-weight: 800; color: var(--text); font-family: monospace; word-break: break-all;" id="cert-modal-domain">--</div>
+                    <div style="font-size: 11px; color: var(--text-sec); margin-top: 4px;" id="cert-modal-dnsnames">备用域名: --</div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div style="background: var(--card-sec); border-radius: 12px; padding: 12px 14px; border: 1px solid var(--border-subtle);">
+                        <div style="font-size: 11px; color: var(--text-sec); font-weight: 600; margin-bottom: 4px;">签发机构 (CA)</div>
+                        <div style="font-size: 13px; font-weight: 700; color: var(--text);" id="cert-modal-issuer">--</div>
+                    </div>
+                    <div style="background: var(--card-sec); border-radius: 12px; padding: 12px 14px; border: 1px solid var(--border-subtle);">
+                        <div style="font-size: 11px; color: var(--text-sec); font-weight: 600; margin-bottom: 4px;">加密算法 / 密钥</div>
+                        <div style="font-size: 13px; font-weight: 700; color: var(--text);" id="cert-modal-keytype">--</div>
+                    </div>
+                </div>
+
+                <div style="background: var(--card-sec); border-radius: 12px; padding: 12px 14px; border: 1px solid var(--border-subtle);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 11px; color: var(--text-sec); font-weight: 600;">证书安全生命周期</span>
+                        <span style="font-size: 11px; font-weight: 800; color: var(--accent);" id="cert-modal-remaining-days">剩余 -- 天</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums;">
+                        <div>生效: <span id="cert-modal-notbefore" style="font-weight: 600;">--</span></div>
+                        <div>到期: <span id="cert-modal-notafter" style="font-weight: 600;">--</span></div>
+                    </div>
+                </div>
+
+                <div style="background: var(--card-sec); border-radius: 12px; padding: 12px 14px; border: 1px solid var(--border-subtle);">
+                    <div style="font-size: 11px; color: var(--text-sec); font-weight: 600; margin-bottom: 4px;">证书文件路径</div>
+                    <div style="font-size: 11px; font-family: monospace; color: var(--text-sec); word-break: break-all;" id="cert-modal-path">--</div>
+                </div>
+
+                <!-- 自动续签拨动开关 -->
+                <div style="background: var(--card-sec); border-radius: 12px; padding: 14px; border: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                    <div style="padding-right: 12px;">
+                        <div style="font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px;">
+                            <span>🛡️ 证书自动续签保障</span>
+                            <span class="tag accent" style="font-size: 10px;">acme.sh</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-sec); margin-top: 2px; line-height: 1.4;">
+                            开启后系统将在到期前 30 天内自动静默检测并完成 ACME 证书续签与服务重载
+                        </div>
+                    </div>
+                    <label class="switch-toggle">
+                        <input type="checkbox" id="toggle-cert-autorenew" onchange="toggleCertAutoRenew(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 底部操作按钮 -->
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 6px;">
+                <button class="pill-btn warning" onclick="manualRenewCert()" id="btn-manual-renew" style="padding: 8px 14px; font-size: 12px; font-weight: 700;">
+                    <span id="renew-btn-text">⚡ 立即手动续签</span>
+                </button>
+                <button class="pill-btn" onclick="closeModals()" style="padding: 8px 20px;">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript 逻辑代码 -->
     <script>
         let currentToken = localStorage.getItem('trojan_jwt_token') || '';
@@ -1412,19 +1532,119 @@
             } catch (e) {}
         }
 
+        let currentCertData = null;
+
         async function loadCertInfo() {
             try {
                 const res = await apiFetch('/common/certInfo');
                 if (res && res.Data) {
                     const cd = res.Data;
+                    currentCertData = cd;
                     if (cd.exists) {
-                        document.getElementById('cert-domain-label').innerText = `🔒 证书: ${cd.domain || '已保护'}`;
+                        document.getElementById('cert-domain-label').innerText = `🔒 证书: ${cd.domain || cd.sni || '已保护'}`;
                         document.getElementById('cert-expiry-label').innerText = `颁发者: ${cd.issuer || 'ACME'} · 剩余: ${cd.daysRemaining} 天 (${cd.notAfter.split(' ')[0]})`;
                     } else {
                         document.getElementById('cert-domain-label').innerText = `⚠️ 未检测到有效证书`;
+                        document.getElementById('cert-expiry-label').innerText = `点击配置或管理 TLS 证书`;
                     }
                 }
             } catch (e) {}
+        }
+
+        // 打开 TLS 证书详情与续签 Modal
+        async function openCertDetailModal() {
+            try {
+                const res = await apiFetch('/common/certInfo');
+                if (res && res.Data) {
+                    currentCertData = res.Data;
+                    const cd = res.Data;
+
+                    document.getElementById('cert-modal-domain').innerText = cd.domain || cd.sni || '未绑定独立域名 (使用默认/自签)';
+                    document.getElementById('cert-modal-dnsnames').innerText = (cd.dnsNames && cd.dnsNames.length > 0) ? `备用域名: ${cd.dnsNames.join(', ')}` : '备用域名: 无';
+                    document.getElementById('cert-modal-issuer').innerText = cd.issuer || 'Let\'s Encrypt / ACME';
+                    document.getElementById('cert-modal-keytype').innerText = cd.keyType || 'ECC 256 / RSA';
+                    document.getElementById('cert-modal-remaining-days').innerText = `剩余 ${cd.daysRemaining} 天`;
+                    document.getElementById('cert-modal-notbefore').innerText = cd.notBefore ? cd.notBefore.split(' ')[0] : '--';
+                    document.getElementById('cert-modal-notafter').innerText = cd.notAfter ? cd.notAfter.split(' ')[0] : '--';
+                    document.getElementById('cert-modal-path').innerText = cd.certPath || '系统默认路径';
+
+                    const statusBadge = document.getElementById('cert-modal-status-badge');
+                    if (statusBadge) {
+                        if (!cd.exists) {
+                            statusBadge.innerText = '⚠️ 证书缺失';
+                            statusBadge.className = 'tag danger';
+                        } else if (cd.isExpired) {
+                            statusBadge.innerText = '🚫 证书已过期';
+                            statusBadge.className = 'tag danger';
+                        } else if (cd.daysRemaining <= 15) {
+                            statusBadge.innerText = '⚠️ 即将到期';
+                            statusBadge.className = 'tag warning';
+                        } else {
+                            statusBadge.innerText = '🟢 正常保护中';
+                            statusBadge.className = 'tag success';
+                        }
+                    }
+
+                    const autoRenewToggle = document.getElementById('toggle-cert-autorenew');
+                    if (autoRenewToggle) {
+                        autoRenewToggle.checked = cd.autoRenew !== false;
+                    }
+
+                    document.getElementById('modal-cert-detail').style.display = 'flex';
+                }
+            } catch (e) {
+                showToast('获取证书详情失败: ' + e, '⚠️');
+            }
+        }
+
+        // 证书自动续签拨动开关切换
+        async function toggleCertAutoRenew(enabled) {
+            try {
+                const formData = new FormData();
+                formData.append('enabled', String(enabled));
+                const res = await apiFetch('/common/cert/autoRenew', {
+                    method: 'POST',
+                    body: new URLSearchParams(formData)
+                });
+                if (res && res.Msg === 'success') {
+                    showToast(enabled ? '已开启证书自动续签保障' : '已关闭证书自动续签', enabled ? '🛡️' : '⏸️');
+                    loadCertInfo();
+                } else {
+                    showToast(res ? res.Msg : '设置失败', '⚠️');
+                }
+            } catch (e) {
+                showToast('设置自动续签失败: ' + e, '⚠️');
+            }
+        }
+
+        // 手动立即续签证书
+        async function manualRenewCert() {
+            if (!confirm('确定要立即执行证书续签吗？续签过程将向 CA 验证并重载 TLS 证书。')) {
+                return;
+            }
+            const btn = document.getElementById('btn-manual-renew');
+            const btnText = document.getElementById('renew-btn-text');
+            if (btnText) btnText.innerText = '⏳ 正在续签...';
+            if (btn) btn.disabled = true;
+
+            try {
+                showToast('正在向 ACME 服务器申请续签证书，请稍候...', '⏳');
+                const res = await apiFetch('/common/cert/renew', { method: 'POST' });
+                if (res && res.Msg === 'success') {
+                    showToast('TLS 证书已成功续签并生效！', '🎉');
+                    openCertDetailModal();
+                    loadCertInfo();
+                } else {
+                    showToast('续签执行完成: ' + (res ? res.Msg : '未知'), 'ℹ️');
+                    openCertDetailModal();
+                    loadCertInfo();
+                }
+            } catch (e) {
+                showToast('续签请求异常: ' + e, '⚠️');
+            } finally {
+                if (btnText) btnText.innerText = '⚡ 立即手动续签';
+                if (btn) btn.disabled = false;
+            }
         }
 
         // 全站每日与小时流量走势面积图

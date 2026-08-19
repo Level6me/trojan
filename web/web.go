@@ -171,6 +171,14 @@ func commonRouter(router *gin.Engine) {
 		common.GET("/certInfo", func(c *gin.Context) {
 			c.JSON(200, controller.CertInfo())
 		})
+		common.POST("/cert/autoRenew", func(c *gin.Context) {
+			enabledStr := c.DefaultPostForm("enabled", "true")
+			enabled, _ := strconv.ParseBool(enabledStr)
+			c.JSON(200, controller.SetAutoRenewCert(enabled))
+		})
+		common.POST("/cert/renew", func(c *gin.Context) {
+			c.JSON(200, controller.RenewCert())
+		})
 		common.GET("/clashRules", func(c *gin.Context) {
 			c.JSON(200, controller.GetClashRules())
 		})
