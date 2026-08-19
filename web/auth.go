@@ -3,6 +3,7 @@ package web
 import (
 	"crypto/sha256"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/appleboy/gin-jwt/v2"
@@ -110,13 +111,59 @@ func jwtInit(timeout int) {
 	}
 }
 
-func updateUser(c *gin.Context) {
+// handlePublicRegister 首次初始化管理员密码（仅在未设置密码时允许一次性初始化）
+func handlePublicRegister(c *gin.Context) {
 	responseBody := controller.ResponseBody{Msg: "success"}
 	defer controller.TimeCost(time.Now(), &responseBody)
-	username := c.DefaultPostForm("username", "admin")
-	pass := c.PostForm("password")
+
+	// 安全检查：如果已存在 admin 密码，坚决拒绝未授权重置
+	adminPass, _ := core.GetValue("admin_pass")
+	if adminPass != "" {
+		c.JSON(403, gin.H{
+			"code":    403,
+			"message": "管理员密码已初始化，公开注册通道已关闭！若忘记密码请登录控制台或通过服务器命令行 trojan pass [新密码] 重置。",
+			"Msg":     "forbidden",
+		})
+		return
+	}
+
+	pass := strings.TrimSpace(c.PostForm("password"))
+	if pass == "" {
+		c.JSON(400, gin.H{
+			"code":    400,
+			"message": "初始管理员密码不能为空！",
+			"Msg":     "password cannot be empty",
+		})
+		return
+	}
+
 	encryPass := fmt.Sprintf("%x", sha256.Sum224([]byte(pass)))
-	err := core.SetValue(fmt.Sprintf("%s_pass", username), encryPass)
+	err := core.SetValue("admin_pass", encryPass)
+	if err != nil {
+		responseBody.Msg = err.Error()
+	}
+	c.JSON(200, responseBody)
+}
+
+// handleAuthResetPass 登录后安全修改管理员密码
+func handleAuthResetPass(c *gin.Context) {
+	responseBody := controller.ResponseBody{Msg: "success"}
+	defer controller.TimeCost(time.Now(), &responseBody)
+
+	username := RequestUsername(c)
+	if username != "admin" {
+		c.JSON(403, gin.H{"code": 403, "message": "非管理员用户无权执行此操作", "Msg": "forbidden"})
+		return
+	}
+
+	pass := strings.TrimSpace(c.PostForm("password"))
+	if pass == "" {
+		c.JSON(400, gin.H{"code": 400, "message": "新密码不能为空", "Msg": "password cannot be empty"})
+		return
+	}
+
+	encryPass := fmt.Sprintf("%x", sha256.Sum224([]byte(pass)))
+	err := core.SetValue("admin_pass", encryPass)
 	if err != nil {
 		responseBody.Msg = err.Error()
 	}
@@ -159,7 +206,9 @@ func Auth(r *gin.Engine, timeout int) *jwt.GinJWTMiddleware {
 	})
 	r.POST("/auth/login", authMiddleware.LoginHandler)
 	r.POST("/login", authMiddleware.LoginHandler)
-	r.POST("/auth/register", updateUser)
+	// 仅在未初始化密码时允许 handlePublicRegister，已初始化则返回 403 Forbidden 彻底杜绝密码被篡改/重置
+	r.POST("/auth/register", handlePublicRegister)
+
 	authO := r.Group("/auth")
 	authO.Use(authMiddleware.MiddlewareFunc())
 	{
@@ -177,7 +226,7 @@ func Auth(r *gin.Engine, timeout int) *jwt.GinJWTMiddleware {
 				})
 			}
 		})
-		authO.POST("/reset_pass", updateUser)
+		authO.POST("/reset_pass", handleAuthResetPass)
 		authO.POST("/logout", authMiddleware.LogoutHandler)
 		authO.POST("/refresh_token", authMiddleware.RefreshHandler)
 	}

@@ -1008,6 +1008,29 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 管理员账号与安全 -->
+                <div class="card" style="grid-column: 1 / -1;">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">🔒 管理员账号与密码安全</div>
+                            <div class="val-sub">修改 Web 控制台管理员 (admin) 登录密码（需登录后操作）</div>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: flex-end;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">输入新管理员密码</label>
+                            <input type="password" id="settings-admin-newpass" class="form-control" placeholder="请输入新密码 (不少于6位)">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">确认新密码</label>
+                            <input type="password" id="settings-admin-confirm-pass" class="form-control" placeholder="请再次输入新密码">
+                        </div>
+                        <button class="pill-btn accent" onclick="changeAdminPassword()" style="height: 38px; padding: 0 20px;">
+                            <span>🔐 更新密码</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -2159,6 +2182,32 @@
                 document.getElementById('login-brand-title').innerText = title;
                 showToast('已更新控制台标题', '✅');
             } catch (e) {}
+        }
+
+        async function changeAdminPassword() {
+            const p1 = document.getElementById('settings-admin-newpass').value.trim();
+            const p2 = document.getElementById('settings-admin-confirm-pass').value.trim();
+            if (!p1) return showToast('请输入新管理员密码', '⚠️');
+            if (p1.length < 6) return showToast('密码长度建议不少于6位', '⚠️');
+            if (p1 !== p2) return showToast('两次输入的密码不一致', '⚠️');
+
+            try {
+                const formData = new FormData();
+                formData.append('password', p1);
+                const res = await apiFetch('/auth/reset_pass', {
+                    method: 'POST',
+                    body: new URLSearchParams(formData)
+                });
+                if (res && res.Msg === 'success') {
+                    showToast('管理员密码修改成功！请牢记新密码', '🎉');
+                    document.getElementById('settings-admin-newpass').value = '';
+                    document.getElementById('settings-admin-confirm-pass').value = '';
+                } else {
+                    showToast(res ? (res.message || res.Msg) : '修改失败', '⚠️');
+                }
+            } catch (e) {
+                showToast('修改异常: ' + e, '⚠️');
+            }
         }
 
         // WebSocket 实时日志流
