@@ -70,6 +70,11 @@
             overflow-x: hidden;
             width: 100%;
             max-width: 100vw;
+            touch-action: pan-x pan-y;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+            overscroll-behavior: none;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
@@ -79,6 +84,9 @@
             padding: 12px 16px calc(100px + env(safe-area-inset-bottom)) 16px;
             -webkit-font-smoothing: antialiased;
             transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        button, a, .card, .pill-btn, .segment-btn, .modal-sheet, .dock {
+            touch-action: manipulation;
         }
         .container { max-width: 1100px; width: 100%; min-width: 0; margin: 0 auto; }
 
@@ -1551,50 +1559,56 @@
             } catch (e) {}
         }
 
-        // 打开 TLS 证书详情与续签 Modal
-        async function openCertDetailModal() {
-            try {
-                const res = await apiFetch('/common/certInfo');
+        function renderCertModalUI(cd) {
+            if (!cd) return;
+            document.getElementById('cert-modal-domain').innerText = cd.domain || cd.sni || '未绑定独立域名 (使用默认/自签)';
+            document.getElementById('cert-modal-dnsnames').innerText = (cd.dnsNames && cd.dnsNames.length > 0) ? `备用域名: ${cd.dnsNames.join(', ')}` : '备用域名: 无';
+            document.getElementById('cert-modal-issuer').innerText = cd.issuer || 'Let\'s Encrypt / ACME';
+            document.getElementById('cert-modal-keytype').innerText = cd.keyType || 'ECC 256 / RSA';
+            document.getElementById('cert-modal-remaining-days').innerText = `剩余 ${cd.daysRemaining || 0} 天`;
+            document.getElementById('cert-modal-notbefore').innerText = cd.notBefore ? cd.notBefore.split(' ')[0] : '--';
+            document.getElementById('cert-modal-notafter').innerText = cd.notAfter ? cd.notAfter.split(' ')[0] : '--';
+            document.getElementById('cert-modal-path').innerText = cd.certPath || '系统默认路径';
+
+            const statusBadge = document.getElementById('cert-modal-status-badge');
+            if (statusBadge) {
+                if (!cd.exists) {
+                    statusBadge.innerText = '⚠️ 证书缺失';
+                    statusBadge.className = 'tag danger';
+                } else if (cd.isExpired) {
+                    statusBadge.innerText = '🚫 证书已过期';
+                    statusBadge.className = 'tag danger';
+                } else if (cd.daysRemaining <= 15) {
+                    statusBadge.innerText = '⚠️ 即将到期';
+                    statusBadge.className = 'tag warning';
+                } else {
+                    statusBadge.innerText = '🟢 正常保护中';
+                    statusBadge.className = 'tag success';
+                }
+            }
+
+            const autoRenewToggle = document.getElementById('toggle-cert-autorenew');
+            if (autoRenewToggle) {
+                autoRenewToggle.checked = cd.autoRenew !== false;
+            }
+        }
+
+        // 打开 TLS 证书详情与续签 Modal (零延迟秒级响应)
+        function openCertDetailModal() {
+            // 1. 如果已有缓存证书数据，立即渲染
+            if (currentCertData) {
+                renderCertModalUI(currentCertData);
+            }
+            // 2. 立即打开弹窗
+            document.getElementById('modal-cert-detail').style.display = 'flex';
+
+            // 3. 后台异步静默刷新最新数据
+            apiFetch('/common/certInfo').then(res => {
                 if (res && res.Data) {
                     currentCertData = res.Data;
-                    const cd = res.Data;
-
-                    document.getElementById('cert-modal-domain').innerText = cd.domain || cd.sni || '未绑定独立域名 (使用默认/自签)';
-                    document.getElementById('cert-modal-dnsnames').innerText = (cd.dnsNames && cd.dnsNames.length > 0) ? `备用域名: ${cd.dnsNames.join(', ')}` : '备用域名: 无';
-                    document.getElementById('cert-modal-issuer').innerText = cd.issuer || 'Let\'s Encrypt / ACME';
-                    document.getElementById('cert-modal-keytype').innerText = cd.keyType || 'ECC 256 / RSA';
-                    document.getElementById('cert-modal-remaining-days').innerText = `剩余 ${cd.daysRemaining} 天`;
-                    document.getElementById('cert-modal-notbefore').innerText = cd.notBefore ? cd.notBefore.split(' ')[0] : '--';
-                    document.getElementById('cert-modal-notafter').innerText = cd.notAfter ? cd.notAfter.split(' ')[0] : '--';
-                    document.getElementById('cert-modal-path').innerText = cd.certPath || '系统默认路径';
-
-                    const statusBadge = document.getElementById('cert-modal-status-badge');
-                    if (statusBadge) {
-                        if (!cd.exists) {
-                            statusBadge.innerText = '⚠️ 证书缺失';
-                            statusBadge.className = 'tag danger';
-                        } else if (cd.isExpired) {
-                            statusBadge.innerText = '🚫 证书已过期';
-                            statusBadge.className = 'tag danger';
-                        } else if (cd.daysRemaining <= 15) {
-                            statusBadge.innerText = '⚠️ 即将到期';
-                            statusBadge.className = 'tag warning';
-                        } else {
-                            statusBadge.innerText = '🟢 正常保护中';
-                            statusBadge.className = 'tag success';
-                        }
-                    }
-
-                    const autoRenewToggle = document.getElementById('toggle-cert-autorenew');
-                    if (autoRenewToggle) {
-                        autoRenewToggle.checked = cd.autoRenew !== false;
-                    }
-
-                    document.getElementById('modal-cert-detail').style.display = 'flex';
+                    renderCertModalUI(res.Data);
                 }
-            } catch (e) {
-                showToast('获取证书详情失败: ' + e, '⚠️');
-            }
+            }).catch(() => {});
         }
 
         // 证书自动续签拨动开关切换
@@ -2215,6 +2229,29 @@
         function closeModals() {
             document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
         }
+
+        // 彻底禁止双指捏合缩放、双击缩放与触控板缩放手势
+        document.addEventListener('gesturestart', function (e) {
+            e.preventDefault();
+        }, { passive: false });
+        document.addEventListener('gesturechange', function (e) {
+            e.preventDefault();
+        }, { passive: false });
+        document.addEventListener('gestureend', function (e) {
+            e.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener('touchmove', function (e) {
+            if (e.touches && e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('wheel', function (e) {
+            if (e.ctrlKey) {
+                e.preventDefault();
+            }
+        }, { passive: false });
 
         // 启动验证
         checkAuth();
