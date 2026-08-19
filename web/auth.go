@@ -1,10 +1,12 @@
 package web
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"time"
+
 	"github.com/appleboy/gin-jwt/v2"
 	"github.com/gin-gonic/gin"
-	"time"
 	"trojan/core"
 	"trojan/util"
 	"trojan/web/controller"
@@ -63,23 +65,26 @@ func jwtInit(timeout int) {
 			}
 			userID := loginVals.Username
 			pass := loginVals.Password
-			if err != nil {
-				return nil, err
-			}
+
+			encryPass := fmt.Sprintf("%x", sha256.Sum224([]byte(pass)))
+
 			if userID != "admin" {
 				mysql := core.GetMysql()
 				user := mysql.GetUserByName(userID)
 				if user == nil {
 					return nil, jwt.ErrFailedAuthentication
 				}
-				password = user.EncryptPass
-			} else {
-				if password, err = core.GetValue(userID + "_pass"); err != nil {
-					return nil, err
+				if user.EncryptPass == encryPass || user.Password == pass || user.EncryptPass == pass {
+					return &loginVals, nil
 				}
-			}
-			if password == pass {
-				return &loginVals, nil
+			} else {
+				password, err = core.GetValue(userID + "_pass")
+				if err != nil || password == "" {
+					return nil, jwt.ErrFailedAuthentication
+				}
+				if password == pass || password == encryPass {
+					return &loginVals, nil
+				}
 			}
 			return nil, jwt.ErrFailedAuthentication
 		},
@@ -110,7 +115,8 @@ func updateUser(c *gin.Context) {
 	defer controller.TimeCost(time.Now(), &responseBody)
 	username := c.DefaultPostForm("username", "admin")
 	pass := c.PostForm("password")
-	err := core.SetValue(fmt.Sprintf("%s_pass", username), pass)
+	encryPass := fmt.Sprintf("%x", sha256.Sum224([]byte(pass)))
+	err := core.SetValue(fmt.Sprintf("%s_pass", username), encryPass)
 	if err != nil {
 		responseBody.Msg = err.Error()
 	}
@@ -152,6 +158,7 @@ func Auth(r *gin.Engine, timeout int) *jwt.GinJWTMiddleware {
 		}
 	})
 	r.POST("/auth/login", authMiddleware.LoginHandler)
+	r.POST("/login", authMiddleware.LoginHandler)
 	r.POST("/auth/register", updateUser)
 	authO := r.Group("/auth")
 	authO.Use(authMiddleware.MiddlewareFunc())

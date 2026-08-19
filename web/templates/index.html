@@ -568,7 +568,7 @@
         <div class="login-card">
             <div style="font-size: 38px; margin-bottom: 8px;">🚀</div>
             <h2 style="font-size: 20px; font-weight: 800; margin-bottom: 4px;" id="login-brand-title">Trojan 控制台</h2>
-            <p style="font-size: 12px; color: var(--text-sec); margin-bottom: 24px;">请输入管理凭据登录控制中心</p>
+            <p style="font-size: 12px; color: var(--text-sec); margin-bottom: 24px;" id="login-sub-desc">请输入管理凭据登录控制中心</p>
             
             <form onsubmit="handleLogin(event)">
                 <div class="form-group" style="text-align: left;">
@@ -579,7 +579,7 @@
                     <label class="form-label">管理密码</label>
                     <input type="password" id="login-password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
                 </div>
-                <button type="submit" class="pill-btn accent" style="width: 100%; padding: 10px; font-size: 14px; border-radius: 12px; margin-top: 10px;">
+                <button type="submit" id="login-submit-btn" class="pill-btn accent" style="width: 100%; padding: 10px; font-size: 14px; border-radius: 12px; margin-top: 10px;">
                     立即进入控制台
                 </button>
             </form>
@@ -1165,8 +1165,20 @@
             }
         }
 
-        // 登录管理
-        function checkAuth() {
+        // 登录与初始化检测
+        let isInitialSetup = false;
+
+        async function checkAuth() {
+            try {
+                const res = await fetch('/auth/check');
+                const data = await res.json();
+                if (data.code === 201) {
+                    isInitialSetup = true;
+                    showInitialSetup();
+                    return;
+                }
+            } catch (e) {}
+
             if (!currentToken) {
                 showLogin();
             } else {
@@ -1174,7 +1186,23 @@
             }
         }
 
+        function showInitialSetup() {
+            document.getElementById('login-brand-title').innerText = '🚀 首次初始化管理员密码';
+            document.getElementById('login-sub-desc').innerText = '检测到尚未设定管理员密码，请为 admin 设置登录密码';
+            document.getElementById('login-submit-btn').innerText = '完成设置并进入控制台';
+            document.getElementById('login-username').value = 'admin';
+            document.getElementById('login-username').readOnly = true;
+            document.getElementById('login-view').style.display = 'flex';
+            document.getElementById('main-content').style.display = 'none';
+            document.getElementById('bottom-dock').style.display = 'none';
+        }
+
         function showLogin() {
+            isInitialSetup = false;
+            document.getElementById('login-brand-title').innerText = 'Trojan 控制台';
+            document.getElementById('login-sub-desc').innerText = '请输入管理凭据登录控制中心';
+            document.getElementById('login-submit-btn').innerText = '立即进入控制台';
+            document.getElementById('login-username').readOnly = false;
             document.getElementById('login-view').style.display = 'flex';
             document.getElementById('main-content').style.display = 'none';
             document.getElementById('bottom-dock').style.display = 'none';
@@ -1191,15 +1219,36 @@
             e.preventDefault();
             const u = document.getElementById('login-username').value.trim();
             const p = document.getElementById('login-password').value.trim();
+
+            if (isInitialSetup) {
+                // 首次设置密码
+                try {
+                    const formData = new FormData();
+                    formData.append('username', 'admin');
+                    formData.append('password', p);
+                    const regRes = await fetch('/auth/register', { method: 'POST', body: formData });
+                    const regData = await regRes.json();
+                    if (regData.Msg === 'success') {
+                        showToast('管理员密码设置成功，正在登录...', '🎉');
+                        isInitialSetup = false;
+                    }
+                } catch (err) {
+                    showToast('设置管理员密码失败', '❌');
+                    return;
+                }
+            }
+
             try {
-                const formData = new FormData();
-                formData.append('username', u);
-                formData.append('password', p);
-                const res = await fetch('/login', { method: 'POST', body: formData });
+                const res = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: u, password: p })
+                });
                 const data = await res.json();
                 if (data.code === 200 && data.token) {
                     currentToken = data.token;
                     localStorage.setItem('trojan_jwt_token', currentToken);
+                    document.cookie = `jwt=${data.token}; path=/; max-age=864000; SameSite=Lax`;
                     showToast('登录成功，欢迎使用 Trojan 控制台', '🎉');
                     showApp();
                 } else {
@@ -1213,6 +1262,7 @@
         function handleLogout() {
             currentToken = '';
             localStorage.removeItem('trojan_jwt_token');
+            document.cookie = 'jwt=; path=/; max-age=0;';
             if (speedTimer) clearInterval(speedTimer);
             if (logWebSocket) logWebSocket.close();
             showToast('已安全退出控制台', '👋');
