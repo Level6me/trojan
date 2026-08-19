@@ -77,10 +77,64 @@ func UpdateResetDay(day uint) *ResponseBody {
 	return &responseBody
 }
 
+// GetGlobalDailyTraffic 获取全站每日流量
+func GetGlobalDailyTraffic(days int) *ResponseBody {
+	responseBody := ResponseBody{Msg: "success"}
+	defer TimeCost(time.Now(), &responseBody)
+	mysql := core.GetMysql()
+	list, err := mysql.GetGlobalDailyTraffic(days)
+	if err != nil {
+		responseBody.Msg = err.Error()
+	}
+	responseBody.Data = list
+	return &responseBody
+}
+
+// GetUserDailyTraffic 获取指定用户每日流量
+func GetUserDailyTraffic(userID uint, days int) *ResponseBody {
+	responseBody := ResponseBody{Msg: "success"}
+	defer TimeCost(time.Now(), &responseBody)
+	mysql := core.GetMysql()
+	list, err := mysql.GetUserDailyTraffic(userID, days)
+	if err != nil {
+		responseBody.Msg = err.Error()
+	}
+	responseBody.Data = list
+	return &responseBody
+}
+
+// GetTodayTopUsers 获取今日流量排行榜
+func GetTodayTopUsers() *ResponseBody {
+	responseBody := ResponseBody{Msg: "success"}
+	defer TimeCost(time.Now(), &responseBody)
+	mysql := core.GetMysql()
+	list, err := mysql.GetTodayTopUsers(5)
+	if err != nil {
+		responseBody.Msg = err.Error()
+	}
+	responseBody.Data = list
+	return &responseBody
+}
+
 // ScheduleTask 定时任务
 func ScheduleTask() {
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	c = cron.New(cron.WithLocation(loc))
+	
+	// 启动时立即执行一次流量快照
+	go func() {
+		time.Sleep(3 * time.Second)
+		mysql := core.GetMysql()
+		mysql.CreateTable()
+		mysql.RecordTrafficSnapshot()
+	}()
+
+	// 每 5 分钟采样一次每日流量增量
+	c.AddFunc("@every 5m", func() {
+		mysql := core.GetMysql()
+		mysql.RecordTrafficSnapshot()
+	})
+
 	c.AddFunc("@daily", func() {
 		mysql := core.GetMysql()
 		if needRestart, err := mysql.DailyCheckExpire(); err != nil {

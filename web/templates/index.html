@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Trojan 控制台</title>
+    <!-- Chart.js 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- QRCode.js 二维码库 -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <style>
+        :root {
+            --bg: #000000;
+            --card: rgba(28, 28, 30, 0.75);
+            --card-sec: rgba(44, 44, 46, 0.6);
+            --card-hover: rgba(58, 58, 60, 0.7);
+            --text: #ffffff;
+            --text-sec: #98989d;
+            --text-ter: #636366;
+            --accent: #0a84ff;
+            --accent-bg: rgba(10, 132, 255, 0.15);
+            --accent-hover: #409cff;
+            --success: #30d158;
+            --success-bg: rgba(48, 209, 88, 0.15);
+            --warning: #ffd60a;
+            --warning-bg: rgba(255, 214, 10, 0.15);
+            --danger: #ff453a;
+            --danger-bg: rgba(255, 69, 58, 0.15);
+            --purple: #bf5af2;
+            --purple-bg: rgba(191, 90, 242, 0.15);
+            --dock: rgba(28, 28, 30, 0.85);
+            --border: rgba(255, 255, 255, 0.12);
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --modal-bg: rgba(28, 28, 30, 0.95);
+            --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.65);
+        }
+
+        [data-theme="light"] {
+            --bg: #f2f2f7;
+            --card: rgba(255, 255, 255, 0.85);
+            --card-sec: rgba(242, 242, 247, 0.75);
+            --card-hover: rgba(235, 235, 240, 0.9);
+            --text: #000000;
+            --text-sec: #8e8e93;
+            --text-ter: #aeaeb2;
+            --accent: #007aff;
+            --accent-bg: rgba(0, 122, 255, 0.1);
+            --accent-hover: #0062cc;
+            --success: #34c759;
+            --success-bg: rgba(52, 199, 89, 0.12);
+            --warning: #ff9500;
+            --warning-bg: rgba(255, 149, 0, 0.12);
+            --danger: #ff3b30;
+            --danger-bg: rgba(255, 59, 48, 0.12);
+            --purple: #af52de;
+            --purple-bg: rgba(175, 82, 222, 0.12);
+            --dock: rgba(255, 255, 255, 0.88);
+            --border: rgba(120, 120, 128, 0.18);
+            --border-subtle: rgba(120, 120, 128, 0.08);
+            --modal-bg: rgba(255, 255, 255, 0.96);
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+            --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.18);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body {
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100vw;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 12px 16px calc(100px + env(safe-area-inset-bottom)) 16px;
+            -webkit-font-smoothing: antialiased;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .container { max-width: 1100px; width: 100%; min-width: 0; margin: 0 auto; }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+            width: max-content;
+            max-width: 90vw;
+        }
+        .toast {
+            background: var(--card);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 9px 16px;
+            border-radius: 24px;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: toastIn 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
+            pointer-events: auto;
+        }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(-12px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* Header */
+        .header {
+            margin: 4px 0 16px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            min-height: 48px;
+            width: 100%;
+        }
+        .header-left {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 0;
+        }
+        .date-badge {
+            font-size: 11px;
+            color: var(--text-sec);
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+        }
+        .page-title {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--text);
+            line-height: 1.2;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        /* Pill Buttons */
+        .pill-btn {
+            background: var(--card-sec);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 99px;
+            padding: 6px 13px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            text-decoration: none;
+            transition: all 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
+            white-space: nowrap;
+            user-select: none;
+            font-family: inherit;
+        }
+        .pill-btn:hover { background: var(--card-hover); transform: translateY(-1px); }
+        .pill-btn:active { transform: translateY(0); }
+        .pill-btn.accent { background: var(--accent); color: #ffffff; border-color: var(--accent); }
+        .pill-btn.accent:hover { background: var(--accent-hover); }
+        .pill-btn.danger { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-bg); }
+        .pill-btn.danger:hover { background: var(--danger); color: #ffffff; }
+        .pill-btn.success { background: var(--success-bg); color: var(--success); border-color: var(--success-bg); }
+        .pill-btn.success:hover { background: var(--success); color: #ffffff; }
+
+        /* Segmented Control */
+        .segmented-control {
+            background: var(--card-sec);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 3px;
+            display: inline-flex;
+            gap: 3px;
+            max-width: 100%;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .segmented-control::-webkit-scrollbar { display: none; }
+        .segment-btn {
+            background: transparent;
+            color: var(--text-sec);
+            border: none;
+            border-radius: 9px;
+            padding: 5px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            font-family: inherit;
+        }
+        .segment-btn.active {
+            background: var(--card);
+            color: var(--text);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* Grid Layouts */
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        @media (max-width: 860px) { .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 480px) { .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        @media (max-width: 960px) { .grid-3 { grid-template-columns: 1fr; } }
+
+        /* Cards */
+        .card {
+            background: var(--card);
+            border-radius: 18px;
+            padding: 16px 18px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+            max-width: 100%;
+            min-width: 0;
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 10px;
+        }
+        .card-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .val-sub {
+            font-size: 11px;
+            color: var(--text-sec);
+            margin-top: 2px;
+            font-weight: 500;
+        }
+
+        /* Metric Cards */
+        .metric-card {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-width: 0;
+            transition: transform 0.2s ease;
+        }
+        .metric-card:hover { transform: translateY(-2px); }
+        .metric-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-sec);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        .metric-val {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--text);
+            letter-spacing: -0.03em;
+            line-height: 1.2;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Tags & Badges */
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 2px 7px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+            user-select: none;
+            font-family: inherit;
+        }
+        .tag.accent { background: var(--accent-bg); color: var(--accent); }
+        .tag.success { background: var(--success-bg); color: var(--success); }
+        .tag.warning { background: var(--warning-bg); color: var(--warning); }
+        .tag.danger { background: var(--danger-bg); color: var(--danger); }
+        .tag.purple { background: var(--purple-bg); color: var(--purple); }
+        .tag.neutral { background: var(--card-sec); color: var(--text-sec); border: 1px solid var(--border-subtle); }
+
+        /* Tables & List View */
+        .table-wrap {
+            overflow-x: auto;
+            border-radius: 14px;
+            border: 1px solid var(--border-subtle);
+            -webkit-overflow-scrolling: touch;
+            width: 100%;
+            min-width: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 13px;
+        }
+        th {
+            background: var(--card-sec);
+            color: var(--text-sec);
+            font-weight: 700;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            font-size: 11px;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+        td {
+            padding: 11px 14px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text);
+            vertical-align: middle;
+        }
+        tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: var(--card-hover); }
+
+        /* Search & Inputs */
+        .search-box {
+            background: var(--card-sec);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 180px;
+        }
+        .search-box input {
+            border: none;
+            background: none;
+            color: var(--text);
+            font-size: 12px;
+            outline: none;
+            padding: 6px 0;
+            width: 100%;
+            font-family: inherit;
+        }
+        .search-box svg { width: 14px; height: 14px; fill: var(--text-sec); flex-shrink: 0; }
+
+        .form-control {
+            width: 100%;
+            background: var(--card-sec);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            padding: 9px 12px;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s ease;
+            font-family: inherit;
+        }
+        .form-control:focus { border-color: var(--accent); }
+        .form-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-sec);
+            margin-bottom: 6px;
+            display: block;
+        }
+        .form-group { margin-bottom: 14px; }
+
+        /* Modals */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            animation: fadeIn 0.2s ease;
+        }
+        .modal-sheet {
+            background: var(--modal-bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 520px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 20px;
+            box-shadow: var(--shadow-lg);
+            animation: scaleUp 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes scaleUp { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+        /* Floating Glass Dock (Abit 经典底栏) */
+        .bottom-spacer { height: 75px; width: 100%; }
+        .dock {
+            position: fixed;
+            bottom: calc(14px + env(safe-area-inset-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            width: 94%;
+            max-width: 500px;
+            height: 62px;
+            background: var(--dock);
+            backdrop-filter: blur(28px) saturate(190%);
+            -webkit-backdrop-filter: blur(28px) saturate(190%);
+            border: 0.5px solid var(--border);
+            border-radius: 31px;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 0 8px;
+            z-index: 1000;
+            box-shadow: var(--shadow-lg);
+        }
+        .dock-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            color: var(--text-sec);
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 20px;
+            transition: all 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
+            position: relative;
+            flex: 1;
+            font-family: inherit;
+        }
+        .dock-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+            transition: transform 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
+            margin-bottom: 2px;
+        }
+        .dock-btn span {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+        .dock-btn.active {
+            color: var(--accent);
+        }
+        .dock-btn.active svg {
+            transform: scale(1.1);
+        }
+        .dock-btn:hover:not(.active) {
+            color: var(--text);
+        }
+
+        /* Progress Bar */
+        .progress-track {
+            height: 6px;
+            background: var(--card-sec);
+            border-radius: 99px;
+            overflow: hidden;
+            width: 100%;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 99px;
+            background: linear-gradient(90deg, var(--accent), #5856d6);
+            transition: width 0.3s ease;
+        }
+
+        /* Terminal Logs View */
+        .terminal-box {
+            background: #090a0f;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            color: #d1d5db;
+            padding: 12px;
+            height: 380px;
+            overflow-y: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Login Modal Form */
+        #login-view {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            z-index: 9990;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .login-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 32px 28px;
+            width: 100%;
+            max-width: 380px;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Login View (未登录时展示) -->
+    <div id="login-view" style="display: none;">
+        <div class="login-card">
+            <div style="font-size: 38px; margin-bottom: 8px;">🚀</div>
+            <h2 style="font-size: 20px; font-weight: 800; margin-bottom: 4px;" id="login-brand-title">Trojan 控制台</h2>
+            <p style="font-size: 12px; color: var(--text-sec); margin-bottom: 24px;">请输入管理凭据登录控制中心</p>
+            
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group" style="text-align: left;">
+                    <label class="form-label">用户名</label>
+                    <input type="text" id="login-username" class="form-control" placeholder="admin" required autocomplete="username">
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label class="form-label">管理密码</label>
+                    <input type="password" id="login-password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="pill-btn accent" style="width: 100%; padding: 10px; font-size: 14px; border-radius: 12px; margin-top: 10px;">
+                    立即进入控制台
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container" id="main-content" style="display: none;">
+        
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="date-badge" id="header-date">TROJAN NODE MANAGER</div>
+                <h1 class="page-title" id="page-heading">
+                    <span>🚀 态势总览</span>
+                </h1>
+            </div>
+            <div class="header-right">
+                <button class="pill-btn" onclick="toggleTheme()" id="theme-btn" title="切换深色/浅色模式">
+                    <span id="theme-icon">🌙</span>
+                </button>
+                <button class="pill-btn danger" onclick="handleLogout()" title="退出登录">
+                    <span>🚪 退出</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- View 1: 态势总览 (Dashboard) -->
+        <div id="view-dashboard">
+            <!-- 4 大核心 KPI 指标卡片 -->
+            <div class="grid-4">
+                <div class="metric-card">
+                    <div class="metric-label">
+                        <span>节点运行内核</span>
+                        <span class="tag success" id="kpi-core-badge">Trojan</span>
+                    </div>
+                    <div class="metric-val" id="kpi-core-name">--</div>
+                    <div class="val-sub" id="kpi-core-uptime">运行时长: 载入中...</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">
+                        <span>用户规模 / 在线</span>
+                        <span class="tag accent" id="kpi-online-badge">🟢 0 活跃</span>
+                    </div>
+                    <div class="metric-val" id="kpi-user-count">0 <span style="font-size: 14px; color: var(--text-sec); font-weight: 500;">位</span></div>
+                    <div class="val-sub" id="kpi-user-active">活跃用户占比: 0%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">
+                        <span>全站累计总流量</span>
+                        <span class="tag purple">本月</span>
+                    </div>
+                    <div class="metric-val" id="kpi-traffic-total">0.00 <span style="font-size: 14px; color: var(--text-sec); font-weight: 500;">GB</span></div>
+                    <div class="val-sub" id="kpi-traffic-sub">↑ 0 B · ↓ 0 B</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">
+                        <span>宿主机负荷状态</span>
+                        <span class="tag neutral" id="kpi-cpu-tag">CPU --%</span>
+                    </div>
+                    <div class="metric-val" id="kpi-ram-val">0.0 <span style="font-size: 14px; color: var(--text-sec); font-weight: 500;">% RAM</span></div>
+                    <div class="val-sub" id="kpi-host-sub">磁盘: -- · 连接: --</div>
+                </div>
+            </div>
+
+            <!-- 实时网络网速与每日流量面积图 -->
+            <div class="grid-2">
+                <!-- 实时速率与连接数 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">⚡ 节点实时吞吐与连接</div>
+                            <div class="val-sub">双向网络流量速率动态监控</div>
+                        </div>
+                        <span class="tag success" style="animation: pulse 1.5s infinite;">🟢 实时刷新</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 16px;">
+                        <div style="background: var(--card-sec); border-radius: 12px; padding: 12px; border: 1px solid var(--border-subtle);">
+                            <div style="font-size: 11px; color: var(--text-sec); font-weight: 600; margin-bottom: 2px;">实时上行 (Upload)</div>
+                            <div style="font-size: 18px; font-weight: 800; color: var(--accent);" id="realtime-up">0.0 KB/s</div>
+                        </div>
+                        <div style="background: var(--card-sec); border-radius: 12px; padding: 12px; border: 1px solid var(--border-subtle);">
+                            <div style="font-size: 11px; color: var(--text-sec); font-weight: 600; margin-bottom: 2px;">实时下行 (Download)</div>
+                            <div style="font-size: 18px; font-weight: 800; color: var(--success);" id="realtime-down">0.0 KB/s</div>
+                        </div>
+                    </div>
+                    <!-- TLS 证书与端口概要 -->
+                    <div style="background: var(--card-sec); border-radius: 12px; padding: 10px 14px; border: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                        <div style="min-width: 0;">
+                            <div style="font-size: 12px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="cert-domain-label">🔒 域名证书: 检测中...</div>
+                            <div style="font-size: 11px; color: var(--text-sec);" id="cert-expiry-label">颁发者: -- · 有效期: --</div>
+                        </div>
+                        <span class="tag accent" id="node-port-badge">TCP 4212</span>
+                    </div>
+                </div>
+
+                <!-- 全站每日流量走势图 (近7天/近30天) -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">📈 全站历史每日流量消耗</div>
+                            <div class="val-sub">每日上传与下载数据走势</div>
+                        </div>
+                        <div class="segmented-control" style="padding: 2px;">
+                            <button class="segment-btn active" id="btn-traffic-7d" onclick="loadGlobalDailyTraffic(7, this)">近7天</button>
+                            <button class="segment-btn" id="btn-traffic-30d" onclick="loadGlobalDailyTraffic(30, this)">近30天</button>
+                        </div>
+                    </div>
+                    <div style="height: 190px; width: 100%; position: relative;">
+                        <canvas id="chart-daily-traffic"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 今日消耗排行榜与快速快捷入口 -->
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">🏆 今日流量消耗排行 TOP 5</div>
+                            <div class="val-sub">今日消耗流量最多的活跃用户</div>
+                        </div>
+                    </div>
+                    <div id="top-users-container" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="text-align: center; color: var(--text-sec); padding: 24px; font-size: 12px;">今日暂无产生流量记录</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">⚡ 快速操作与控制</div>
+                            <div class="val-sub">节点核心生命周期与快捷分发</div>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding-top: 4px;">
+                        <button class="pill-btn accent" onclick="openCreateUserModal()" style="padding: 10px; border-radius: 12px;">
+                            <span>➕ 快速新增用户</span>
+                        </button>
+                        <button class="pill-btn" onclick="switchView('nodes')" style="padding: 10px; border-radius: 12px;">
+                            <span>📱 扫码/订阅分发</span>
+                        </button>
+                        <button class="pill-btn" onclick="restartTrojanService()" style="padding: 10px; border-radius: 12px;">
+                            <span>🔄 重启 Trojan 核心</span>
+                        </button>
+                        <button class="pill-btn" onclick="switchView('settings')" style="padding: 10px; border-radius: 12px;">
+                            <span>⚙️ 切换 Trojan-Go</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View 2: 用户档案与配额 (Users) -->
+        <div id="view-users" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">👥 用户档案与流量配额</div>
+                        <div class="val-sub">管理 Trojan 授权账户、用量限制与有效期限</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="pill-btn" onclick="exportUsersCSV()">
+                            <span>📥 导出 CSV</span>
+                        </button>
+                        <button class="pill-btn accent" onclick="openCreateUserModal()">
+                            <span>➕ 新增用户</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 工具栏：搜索与筛选 -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap;">
+                    <div class="search-box" style="flex: 1; max-width: 320px;">
+                        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                        <input type="text" id="user-search-input" placeholder="搜索用户名 / 密码 / 状态..." oninput="renderUserTable()">
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-sec);">
+                        共 <b id="user-total-badge" style="color: var(--text);">0</b> 位用户
+                    </div>
+                </div>
+
+                <!-- 用户数据表格 -->
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>状态</th>
+                                <th>用户名</th>
+                                <th>节点密码</th>
+                                <th>流量消耗 / 配额</th>
+                                <th>到期时间</th>
+                                <th>每日用量</th>
+                                <th>操作管理</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-table-tbody">
+                            <tr><td colspan="7" style="text-align: center; color: var(--text-sec); padding: 30px;">正在加载用户列表...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- View 3: 节点与多客户端订阅 (Nodes & Subscription) -->
+        <div id="view-nodes" style="display: none;">
+            <div class="grid-2">
+                <!-- 节点连接参数卡片 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">🌐 节点参数概览</div>
+                            <div class="val-sub">标准 Trojan 协议连接配置</div>
+                        </div>
+                        <span class="tag success">🟢 正常运行</span>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 10px; margin: 12px 0;">
+                        <div style="background: var(--card-sec); border-radius: 12px; padding: 10px 14px; border: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 12px; color: var(--text-sec);">服务器地址 (Domain)</span>
+                            <b style="font-size: 13px; font-family: monospace; color: var(--accent);" id="node-info-domain">--</b>
+                        </div>
+                        <div style="background: var(--card-sec); border-radius: 12px; padding: 10px 14px; border: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 12px; color: var(--text-sec);">连接端口 (Port)</span>
+                            <b style="font-size: 13px; font-family: monospace; color: var(--text);" id="node-info-port">--</b>
+                        </div>
+                        <div style="background: var(--card-sec); border-radius: 12px; padding: 10px 14px; border: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 12px; color: var(--text-sec);">传输安全 (TLS / SNI)</span>
+                            <b style="font-size: 13px; color: var(--success);">TLS 1.3 (启用)</b>
+                        </div>
+                    </div>
+
+                    <div style="font-size: 12px; color: var(--text-sec); line-height: 1.5; background: var(--card-sec); padding: 10px 12px; border-radius: 10px;">
+                        💡 提示：所有客户端直接使用您在「用户档案」中创建的密码即可建立安全连接。
+                    </div>
+                </div>
+
+                <!-- 扫码与一键配置生成器 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">📱 客户端一键配置 & 扫码</div>
+                            <div class="val-sub">选择用户快速生成导入链接与二维码</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">选择目标用户</label>
+                        <select id="sub-user-select" class="form-control" onchange="updateSubscriptionPreview()"></select>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;">
+                        <button class="pill-btn accent" onclick="copyTrojanURL()">
+                            <span>📋 复制 trojan:// 链接</span>
+                        </button>
+                        <button class="pill-btn" onclick="showQRCodeModal()">
+                            <span>📷 扫码极速导入</span>
+                        </button>
+                        <button class="pill-btn" onclick="copyClashURL()">
+                            <span>⚡ 复制 Clash 订阅</span>
+                        </button>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">通用节点链接预览</label>
+                        <input type="text" id="sub-url-preview" class="form-control" readonly style="font-family: monospace; font-size: 11px; background: var(--card-sec);">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 全平台新手配置向导 -->
+            <div class="card" style="margin-top: 14px;">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">📖 全平台客户端使用向导</div>
+                        <div class="val-sub">常见平台推荐客户端与快速配置方式</div>
+                    </div>
+                </div>
+                <div class="grid-4" style="margin-bottom: 0;">
+                    <div style="background: var(--card-sec); padding: 12px; border-radius: 12px; border: 1px solid var(--border-subtle);">
+                        <div style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">🍎 iOS (iPhone / iPad)</div>
+                        <div style="font-size: 12px; color: var(--text-sec); line-height: 1.4;">推荐使用 <b>Shadowrocket</b>、<b>Loon</b> 或 <b>Quantumult X</b>，直接点击扫码即可一键导入。</div>
+                    </div>
+                    <div style="background: var(--card-sec); padding: 12px; border-radius: 12px; border: 1px solid var(--border-subtle);">
+                        <div style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">🤖 Android (安卓)</div>
+                        <div style="font-size: 12px; color: var(--text-sec); line-height: 1.4;">推荐使用 <b>Clash Meta for Android</b> 或 <b>v2rayNG</b>，支持订阅与扫码导入。</div>
+                    </div>
+                    <div style="background: var(--card-sec); padding: 12px; border-radius: 12px; border: 1px solid var(--border-subtle);">
+                        <div style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">💻 macOS (苹果电脑)</div>
+                        <div style="font-size: 12px; color: var(--text-sec); line-height: 1.4;">推荐使用 <b>Clash Verge Rev</b>、<b>Sing-box</b> 或 <b>Surge for Mac</b>，复制订阅链接即可。</div>
+                    </div>
+                    <div style="background: var(--card-sec); padding: 12px; border-radius: 12px; border: 1px solid var(--border-subtle);">
+                        <div style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">🪟 Windows</div>
+                        <div style="font-size: 12px; color: var(--text-sec); line-height: 1.4;">推荐使用 <b>Clash Verge Rev</b> 或 <b>NekoBox for Windows</b>，一键导入 Clash 订阅。</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View 4: 内核策略与系统配置 (Settings) -->
+        <div id="view-settings" style="display: none;">
+            <div class="grid-2">
+                <!-- 核心与内核管理 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">⚙️ 核心与运行控制</div>
+                            <div class="val-sub">服务端启停、重启与内核切换</div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 13px; font-weight: 700;">当前服务内核</div>
+                                <div style="font-size: 11px; color: var(--text-sec);" id="settings-type-desc">标准 C++ 版 Trojan 原生内核</div>
+                            </div>
+                            <div class="segmented-control" style="padding: 2px;">
+                                <button class="segment-btn active" id="btn-type-trojan" onclick="switchTrojanType('trojan')">Trojan</button>
+                                <button class="segment-btn" id="btn-type-trojan-go" onclick="switchTrojanType('trojan-go')">Trojan-Go</button>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 13px; font-weight: 700;">运行日志等级 (Log Level)</div>
+                                <div style="font-size: 11px; color: var(--text-sec);">等级越低记录越详细</div>
+                            </div>
+                            <select id="settings-loglevel-select" class="form-control" style="width: 130px; padding: 4px 8px; font-size: 12px;" onchange="changeLogLevel(this.value)">
+                                <option value="0">ALL (所有)</option>
+                                <option value="1" selected>INFO (常规)</option>
+                                <option value="2">WARN (警告)</option>
+                                <option value="3">ERROR (错误)</option>
+                                <option value="4">FATAL (严重)</option>
+                            </select>
+                        </div>
+
+                        <div style="display: flex; gap: 8px; margin-top: 6px;">
+                            <button class="pill-btn" onclick="restartTrojanService()" style="flex: 1;">
+                                <span>🔄 平滑重启核心</span>
+                            </button>
+                            <button class="pill-btn danger" onclick="stopTrojanService()" style="flex: 1;">
+                                <span>🛑 停止服务</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 自动化运维与重置 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">📅 流量重置与品牌定制</div>
+                            <div class="val-sub">定时任务周期与控制台显示</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">每月流量自动重置日 (1-31，0表示不重置)</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="number" id="settings-reset-day" class="form-control" min="0" max="31" value="1">
+                            <button class="pill-btn accent" onclick="saveResetDay()">保存设定</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">自定义控制台/登录页标题</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="settings-brand-title" class="form-control" placeholder="Trojan 控制台">
+                            <button class="pill-btn accent" onclick="saveBrandTitle()">更新标题</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View 5: 实时审计日志 (Logs) -->
+        <div id="view-logs" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">📜 实时服务审计终端</div>
+                        <div class="val-sub">Trojan 核心服务端实时输出日志流</div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="pill-btn" onclick="toggleLogAutoScroll()" id="btn-log-autoscroll">
+                            <span>📜 自动滚屏: 开启</span>
+                        </button>
+                        <button class="pill-btn" onclick="clearTerminalLogs()">
+                            <span>🗑️ 清屏</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="terminal-box" id="terminal-log-output">
+[系统] 正在连接 WebSocket 实时日志流...
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-spacer"></div>
+    </div>
+
+    <!-- Floating Glass Dock (Abit 经典底栏) -->
+    <div class="dock" id="bottom-dock" style="display: none;">
+        <button class="dock-btn active" id="dock-btn-dashboard" onclick="switchView('dashboard')">
+            <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+            <span>态势总览</span>
+        </button>
+        <button class="dock-btn" id="dock-btn-users" onclick="switchView('users')">
+            <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+            <span>用户档案</span>
+        </button>
+        <button class="dock-btn" id="dock-btn-nodes" onclick="switchView('nodes')">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+            <span>节点订阅</span>
+        </button>
+        <button class="dock-btn" id="dock-btn-settings" onclick="switchView('settings')">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            <span>内核策略</span>
+        </button>
+        <button class="dock-btn" id="dock-btn-logs" onclick="switchView('logs')">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            <span>实时审计</span>
+        </button>
+    </div>
+
+    <!-- Modal 1: 新增/编辑用户 -->
+    <div class="modal-overlay" id="modal-user">
+        <div class="modal-sheet">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="font-size: 16px; font-weight: 800;" id="user-modal-title">➕ 新增 Trojan 用户</h3>
+                <button onclick="closeModals()" style="background:none; border:none; color:var(--text-sec); font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            
+            <form onsubmit="handleSaveUser(event)">
+                <input type="hidden" id="user-edit-id" value="">
+                <div class="form-group">
+                    <label class="form-label">用户名 (Username)</label>
+                    <input type="text" id="user-form-name" class="form-control" placeholder="如 user01" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" style="display: flex; justify-content: space-between;">
+                        <span>节点密码 (Password)</span>
+                        <a href="javascript:void(0)" onclick="generateRandomPass()" style="color: var(--accent); font-size: 11px; text-decoration: none; font-weight: 600;">⚡ 随机高强密码</a>
+                    </label>
+                    <input type="text" id="user-form-pass" class="form-control" placeholder="输入或生成密码" required>
+                </div>
+                <div class="form-group" id="group-quota-days">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label class="form-label">流量配额 (GB, 0不限)</label>
+                            <input type="number" id="user-form-quota" class="form-control" placeholder="0" min="0" value="0">
+                        </div>
+                        <div>
+                            <label class="form-label">可用期限 (天, 0永久)</label>
+                            <input type="number" id="user-form-days" class="form-control" placeholder="0" min="0" value="0">
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
+                    <button type="button" class="pill-btn" onclick="closeModals()">取消</button>
+                    <button type="submit" class="pill-btn accent">保存用户档案</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 2: 用户个人每日用量历史图表 -->
+    <div class="modal-overlay" id="modal-user-traffic">
+        <div class="modal-sheet" style="max-width: 620px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                    <h3 style="font-size: 16px; font-weight: 800;" id="user-traffic-modal-title">📊 每日流量走势</h3>
+                    <div class="val-sub" id="user-traffic-modal-sub">用户近期用量统计明细</div>
+                </div>
+                <button onclick="closeModals()" style="background:none; border:none; color:var(--text-sec); font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            
+            <div style="height: 180px; width: 100%; position: relative; margin-bottom: 14px;">
+                <canvas id="chart-user-daily-traffic"></canvas>
+            </div>
+
+            <div class="table-wrap" style="max-height: 220px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>上传流量</th>
+                            <th>下载流量</th>
+                            <th>当日合计</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-traffic-history-tbody">
+                        <tr><td colspan="4" style="text-align: center; color: var(--text-sec); padding: 20px;">正在载入历史流量记录...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: 二维码极速扫码导入 -->
+    <div class="modal-overlay" id="modal-qrcode">
+        <div class="modal-sheet" style="max-width: 360px; text-align: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="font-size: 16px; font-weight: 800;">📷 扫码极速导入</h3>
+                <button onclick="closeModals()" style="background:none; border:none; color:var(--text-sec); font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            
+            <div id="qrcode-canvas-container" style="background: #ffffff; padding: 14px; border-radius: 16px; display: inline-block; margin-bottom: 14px; box-shadow: var(--shadow-sm);"></div>
+            <div style="font-size: 12px; font-weight: 700; color: var(--text);" id="qrcode-username-label">--</div>
+            <p style="font-size: 11px; color: var(--text-sec); margin-top: 4px;">支持 Shadowrocket / Loon / Stash / v2rayNG 扫码直接连接</p>
+        </div>
+    </div>
+
+    <!-- JavaScript 逻辑代码 -->
+    <script>
+        let currentToken = localStorage.getItem('trojan_jwt_token') || '';
+        let allUsers = [];
+        let serverDomain = '';
+        let serverPort = 4212;
+        let globalDailyChartInstance = null;
+        let userDailyChartInstance = null;
+        let logWebSocket = null;
+        let logAutoScroll = true;
+        let speedTimer = null;
+
+        // 工具函数
+        function showToast(msg, icon = 'ℹ️') {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            el.className = 'toast';
+            el.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+            container.appendChild(el);
+            setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 250); }, 3000);
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 B';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        // 主题切换
+        function toggleTheme() {
+            const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+            document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            localStorage.setItem('trojan_theme', isDark ? 'light' : 'dark');
+            document.getElementById('theme-icon').innerText = isDark ? '☀️' : '🌙';
+            if (globalDailyChartInstance) globalDailyChartInstance.destroy();
+            loadGlobalDailyTraffic(7);
+        }
+
+        // 初始化主题
+        if (localStorage.getItem('trojan_theme') === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+            document.getElementById('theme-icon').innerText = '☀️';
+        }
+
+        // 统一 API 请求封装
+        async function apiFetch(url, options = {}) {
+            options.headers = options.headers || {};
+            if (currentToken) {
+                options.headers['Authorization'] = `Bearer ${currentToken}`;
+            }
+            try {
+                const res = await fetch(url, options);
+                if (res.status === 401) {
+                    showLogin();
+                    throw new Error('未授权或登录已过期');
+                }
+                return await res.json();
+            } catch (err) {
+                console.error(url, err);
+                throw err;
+            }
+        }
+
+        // 登录管理
+        function checkAuth() {
+            if (!currentToken) {
+                showLogin();
+            } else {
+                showApp();
+            }
+        }
+
+        function showLogin() {
+            document.getElementById('login-view').style.display = 'flex';
+            document.getElementById('main-content').style.display = 'none';
+            document.getElementById('bottom-dock').style.display = 'none';
+        }
+
+        function showApp() {
+            document.getElementById('login-view').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+            document.getElementById('bottom-dock').style.display = 'flex';
+            initApp();
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('login-username').value.trim();
+            const p = document.getElementById('login-password').value.trim();
+            try {
+                const formData = new FormData();
+                formData.append('username', u);
+                formData.append('password', p);
+                const res = await fetch('/login', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.code === 200 && data.token) {
+                    currentToken = data.token;
+                    localStorage.setItem('trojan_jwt_token', currentToken);
+                    showToast('登录成功，欢迎使用 Trojan 控制台', '🎉');
+                    showApp();
+                } else {
+                    showToast(data.message || '用户名或密码错误', '⚠️');
+                }
+            } catch (err) {
+                showToast('登录请求失败，请检查网络或服务状态', '❌');
+            }
+        }
+
+        function handleLogout() {
+            currentToken = '';
+            localStorage.removeItem('trojan_jwt_token');
+            if (speedTimer) clearInterval(speedTimer);
+            if (logWebSocket) logWebSocket.close();
+            showToast('已安全退出控制台', '👋');
+            showLogin();
+        }
+
+        // 视图切换
+        function switchView(viewName) {
+            ['dashboard', 'users', 'nodes', 'settings', 'logs'].forEach(v => {
+                const el = document.getElementById(`view-${v}`);
+                const btn = document.getElementById(`dock-btn-${v}`);
+                if (el) el.style.display = (v === viewName) ? 'block' : 'none';
+                if (btn) btn.classList.toggle('active', v === viewName);
+            });
+
+            const headingMap = {
+                dashboard: '<span>🚀 态势总览</span>',
+                users: '<span>👥 用户档案</span>',
+                nodes: '<span>🌐 节点订阅</span>',
+                settings: '<span>⚙️ 内核策略</span>',
+                logs: '<span>📜 实时审计</span>'
+            };
+            document.getElementById('page-heading').innerHTML = headingMap[viewName] || '<span>🚀 Trojan 控制台</span>';
+
+            if (viewName === 'logs') initLogWebSocket();
+        }
+
+        // App 初始化
+        async function initApp() {
+            loadDashboard();
+            loadUsers();
+            loadCertInfo();
+            loadSettings();
+            if (speedTimer) clearInterval(speedTimer);
+            speedTimer = setInterval(fetchServerRealtime, 2500);
+        }
+
+        // 态势总览数据
+        async function loadDashboard() {
+            try {
+                const verRes = await apiFetch('/common/version');
+                if (verRes && verRes.Data) {
+                    const vd = verRes.Data;
+                    document.getElementById('kpi-core-name').innerText = vd.trojanType === 'trojan-go' ? 'Trojan-Go' : 'Trojan C++';
+                    document.getElementById('kpi-core-badge').innerText = vd.trojanType || 'Trojan';
+                    document.getElementById('kpi-core-uptime').innerText = `运行时长: ${vd.trojanUptime || '运行中'}`;
+                    document.getElementById('settings-type-desc').innerText = vd.trojanType === 'trojan-go' ? 'Go 语言增强版 Trojan 内核 (支持多路复用与WS)' : '标准 C++ 版 Trojan 原生内核';
+                    document.getElementById('btn-type-trojan').classList.toggle('active', vd.trojanType !== 'trojan-go');
+                    document.getElementById('btn-type-trojan-go').classList.toggle('active', vd.trojanType === 'trojan-go');
+                }
+                loadGlobalDailyTraffic(7);
+                loadTopUsers();
+            } catch (e) {}
+        }
+
+        async function fetchServerRealtime() {
+            try {
+                const res = await apiFetch('/common/serverInfo');
+                if (res && res.Data) {
+                    const d = res.Data;
+                    if (d.speed) {
+                        document.getElementById('realtime-up').innerText = `${formatBytes(d.speed.Up)}/s`;
+                        document.getElementById('realtime-down').innerText = `${formatBytes(d.speed.Down)}/s`;
+                    }
+                    if (d.memory) {
+                        document.getElementById('kpi-ram-val').innerHTML = `${(d.memory.usedPercent || 0).toFixed(1)} <span style="font-size: 14px; color: var(--text-sec); font-weight: 500;">% RAM</span>`;
+                    }
+                    if (d.cpu && d.cpu.length > 0) {
+                        document.getElementById('kpi-cpu-tag').innerText = `CPU ${(d.cpu[0] || 0).toFixed(1)}%`;
+                    }
+                    if (d.disk && d.netCount) {
+                        document.getElementById('kpi-host-sub').innerText = `磁盘: ${formatBytes(d.disk.used)} / ${formatBytes(d.disk.total)} · 连接: TCP ${d.netCount.tcp || 0}`;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        async function loadCertInfo() {
+            try {
+                const res = await apiFetch('/common/certInfo');
+                if (res && res.Data) {
+                    const cd = res.Data;
+                    if (cd.exists) {
+                        document.getElementById('cert-domain-label').innerText = `🔒 证书: ${cd.domain || '已保护'}`;
+                        document.getElementById('cert-expiry-label').innerText = `颁发者: ${cd.issuer || 'ACME'} · 剩余: ${cd.daysRemaining} 天 (${cd.notAfter.split(' ')[0]})`;
+                    } else {
+                        document.getElementById('cert-domain-label').innerText = `⚠️ 未检测到有效证书`;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 全站每日流量面积图
+        async function loadGlobalDailyTraffic(days = 7, btn = null) {
+            if (btn) {
+                document.getElementById('btn-traffic-7d').classList.toggle('active', days === 7);
+                document.getElementById('btn-traffic-30d').classList.toggle('active', days === 30);
+            }
+            try {
+                const res = await apiFetch(`/trojan/data/traffic/global?days=${days}`);
+                const list = (res && res.Data) ? res.Data : [];
+                
+                const labels = list.map(x => x.log_date ? x.log_date.slice(5) : '');
+                const upData = list.map(x => (x.upload / (1024*1024*1024)).toFixed(2));
+                const downData = list.map(x => (x.download / (1024*1024*1024)).toFixed(2));
+
+                const ctx = document.getElementById('chart-daily-traffic')?.getContext('2d');
+                if (!ctx) return;
+
+                const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+                const textColor = isDark ? '#98989d' : '#8e8e93';
+                const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+
+                if (globalDailyChartInstance) globalDailyChartInstance.destroy();
+
+                globalDailyChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels.length ? labels : ['暂无数据'],
+                        datasets: [
+                            {
+                                label: '下载流量 (GB)',
+                                data: downData.length ? downData : [0],
+                                borderColor: '#30d158',
+                                backgroundColor: 'rgba(48, 209, 88, 0.15)',
+                                fill: true,
+                                tension: 0.35,
+                                borderWidth: 2
+                            },
+                            {
+                                label: '上传流量 (GB)',
+                                data: upData.length ? upData : [0],
+                                borderColor: '#0a84ff',
+                                backgroundColor: 'rgba(10, 132, 255, 0.12)',
+                                fill: true,
+                                tension: 0.35,
+                                borderWidth: 2
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top', labels: { color: textColor, font: { size: 10, weight: 600 }, boxWidth: 10 } }
+                        },
+                        scales: {
+                            x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 } } },
+                            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 } } }
+                        }
+                    }
+                });
+            } catch (e) {}
+        }
+
+        // 今日 TOP 用户排行
+        async function loadTopUsers() {
+            try {
+                const res = await apiFetch('/trojan/data/traffic/top');
+                const list = (res && res.Data) ? res.Data : [];
+                const container = document.getElementById('top-users-container');
+                if (!list || list.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; color: var(--text-sec); padding: 24px; font-size: 12px;">今日暂无产生流量记录</div>';
+                    return;
+                }
+                const maxVal = Math.max(...list.map(x => x.total), 1);
+                let html = '';
+                list.forEach((item, idx) => {
+                    const pct = Math.min(100, Math.round((item.total / maxVal) * 100));
+                    html += `
+                        <div style="background: var(--card-sec); border-radius: 10px; padding: 8px 12px; border: 1px solid var(--border-subtle);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 10px; font-weight: 800; color: var(--text-sec); background: rgba(120,120,128,0.15); padding: 1px 5px; border-radius: 4px;">#${idx+1}</span>
+                                    <span style="font-size: 12px; font-weight: 700; color: var(--text);">${escapeHtml(item.username)}</span>
+                                </div>
+                                <span style="font-size: 11px; font-weight: 700; color: var(--accent);">${formatBytes(item.total)}</span>
+                            </div>
+                            <div class="progress-track"><div class="progress-fill" style="width: ${pct}%;"></div></div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } catch (e) {}
+        }
+
+        // 用户管理
+        async function loadUsers() {
+            try {
+                const res = await apiFetch('/trojan/user');
+                if (res && res.Data) {
+                    allUsers = res.Data.userList || [];
+                    serverDomain = res.Data.domain || window.location.hostname;
+                    serverPort = res.Data.port || 4212;
+
+                    document.getElementById('node-info-domain').innerText = serverDomain;
+                    document.getElementById('node-info-port').innerText = serverPort;
+                    document.getElementById('node-port-badge').innerText = `TCP ${serverPort}`;
+
+                    renderUserTable();
+                    updateUserSelectOptions();
+                    calculateKPIs();
+                }
+            } catch (e) {}
+        }
+
+        function calculateKPIs() {
+            document.getElementById('kpi-user-count').innerHTML = `${allUsers.length} <span style="font-size: 14px; color: var(--text-sec); font-weight: 500;">位</span>`;
+            let totalBytes = 0;
+            let totalUp = 0;
+            let totalDown = 0;
+            let onlineCount = 0;
+
+            allUsers.forEach(u => {
+                totalUp += (u.Upload || 0);
+                totalDown += (u.Download || 0);
+                totalBytes += ((u.Upload || 0) + (u.Download || 0));
+                if ((u.Upload || 0) + (u.Download || 0) > 0) onlineCount++;
+            });
+
+            document.getElementById('kpi-traffic-total').innerHTML = `${(totalBytes / (1024*1024*1024)).toFixed(2)} <span style="font-size: 14px; color: var(--text-sec); font-weight: 500;">GB</span>`;
+            document.getElementById('kpi-traffic-sub').innerText = `↑ ${formatBytes(totalUp)} · ↓ ${formatBytes(totalDown)}`;
+            document.getElementById('kpi-online-badge').innerText = `🟢 ${onlineCount} 活跃`;
+            document.getElementById('kpi-user-active').innerText = `活跃用户: ${allUsers.length ? Math.round((onlineCount/allUsers.length)*100) : 0}%`;
+        }
+
+        function renderUserTable() {
+            const tbody = document.getElementById('user-table-tbody');
+            const q = (document.getElementById('user-search-input')?.value || '').toLowerCase();
+            let filtered = allUsers.filter(u => 
+                (u.Username && u.Username.toLowerCase().includes(q)) ||
+                (u.Password && u.Password.toLowerCase().includes(q))
+            );
+
+            document.getElementById('user-total-badge').innerText = filtered.length;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-sec); padding: 30px;">未检索到匹配的 Trojan 用户</td></tr>';
+                return;
+            }
+
+            let html = '';
+            filtered.forEach(u => {
+                const used = (u.Upload || 0) + (u.Download || 0);
+                const quota = u.Quota || 0;
+                let quotaStr = '无限制';
+                let pct = 0;
+                if (quota > 0) {
+                    quotaStr = formatBytes(quota);
+                    pct = Math.min(100, Math.round((used / quota) * 100));
+                }
+
+                const isOnline = used > 0;
+                const statusBadge = isOnline ? '<span class="tag success">🟢 活跃</span>' : '<span class="tag neutral">⚪ 离线</span>';
+                const expiryBadge = u.ExpiryDate ? `<span class="tag warning">${escapeHtml(u.ExpiryDate)}</span>` : '<span class="tag neutral">永久有效</span>';
+
+                html += `
+                    <tr>
+                        <td>${statusBadge}</td>
+                        <td><b style="font-size: 13px;">${escapeHtml(u.Username)}</b></td>
+                        <td>
+                            <code style="background: var(--card-sec); padding: 3px 6px; border-radius: 6px; font-size: 11px; cursor: pointer;" onclick="copyText('${escapeHtml(u.Password)}', '已复制节点密码')">${escapeHtml(u.Password)}</code>
+                        </td>
+                        <td style="min-width: 140px;">
+                            <div style="font-size: 11px; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                                <span>${formatBytes(used)}</span>
+                                <span style="color: var(--text-sec);">${quotaStr}</span>
+                            </div>
+                            <div class="progress-track"><div class="progress-fill" style="width: ${quota > 0 ? pct : 100}%; background: ${pct > 90 ? 'var(--danger)' : 'linear-gradient(90deg, var(--accent), #5856d6)'};"></div></div>
+                        </td>
+                        <td>${expiryBadge}</td>
+                        <td>
+                            <button class="pill-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openUserDailyTrafficModal(${u.ID}, '${escapeHtml(u.Username)}')">
+                                <span>📊 每日用量</span>
+                            </button>
+                        </td>
+                        <td>
+                            <div style="display: flex; gap: 4px;">
+                                <button class="pill-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openEditUserModal(${u.ID}, '${escapeHtml(u.Username)}', '${escapeHtml(u.Password)}')">编辑</button>
+                                <button class="pill-btn danger" style="padding: 3px 8px; font-size: 11px;" onclick="deleteUser(${u.ID}, '${escapeHtml(u.Username)}')">删除</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function updateUserSelectOptions() {
+            const sel = document.getElementById('sub-user-select');
+            if (!sel) return;
+            sel.innerHTML = allUsers.map(u => `<option value="${escapeHtml(u.Password)}">${escapeHtml(u.Username)} (${escapeHtml(u.Password)})</option>`).join('');
+            updateSubscriptionPreview();
+        }
+
+        function updateSubscriptionPreview() {
+            const sel = document.getElementById('sub-user-select');
+            const pass = sel ? sel.value : (allUsers[0]?.Password || '');
+            const url = `trojan://${pass}@${serverDomain}:${serverPort}#${encodeURIComponent(serverDomain)}`;
+            document.getElementById('sub-url-preview').value = url;
+        }
+
+        // 订阅复制与二维码
+        function copyTrojanURL() {
+            const url = document.getElementById('sub-url-preview').value;
+            copyText(url, '已复制 trojan:// 通用节点链接');
+        }
+
+        function copyClashURL() {
+            const sel = document.getElementById('sub-user-select');
+            const pass = sel ? sel.value : '';
+            const clashUrl = `${window.location.origin}/trojan/user/subscribe?token=${pass}`;
+            copyText(clashUrl, '已复制 Clash 订阅链接');
+        }
+
+        function showQRCodeModal() {
+            const sel = document.getElementById('sub-user-select');
+            const user = allUsers.find(u => u.Password === sel.value);
+            const url = document.getElementById('sub-url-preview').value;
+            const container = document.getElementById('qrcode-canvas-container');
+            container.innerHTML = '';
+            new QRCode(container, { text: url, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+            document.getElementById('qrcode-username-label').innerText = `用户: ${user ? user.Username : '--'}`;
+            document.getElementById('modal-qrcode').style.display = 'flex';
+        }
+
+        // 用户每日用量详情 Modal
+        async function openUserDailyTrafficModal(userId, username) {
+            document.getElementById('user-traffic-modal-title').innerText = `📊 ${username} · 每日流量走势`;
+            document.getElementById('modal-user-traffic').style.display = 'flex';
+            try {
+                const res = await apiFetch(`/trojan/data/traffic/user?id=${userId}&days=30`);
+                const list = (res && res.Data) ? res.Data : [];
+                
+                const labels = list.map(x => x.log_date ? x.log_date.slice(5) : '');
+                const dataVals = list.map(x => (x.total / (1024*1024)).toFixed(1));
+
+                const ctx = document.getElementById('chart-user-daily-traffic')?.getContext('2d');
+                if (ctx) {
+                    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+                    const textColor = isDark ? '#98989d' : '#8e8e93';
+                    const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+
+                    if (userDailyChartInstance) userDailyChartInstance.destroy();
+
+                    userDailyChartInstance = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels.length ? labels : ['今日'],
+                            datasets: [{
+                                label: '当日流量 (MB)',
+                                data: dataVals.length ? dataVals : [0],
+                                backgroundColor: 'rgba(10, 132, 255, 0.75)',
+                                borderRadius: 4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { grid: { display: false }, ticks: { color: textColor, font: { size: 9 } } },
+                                y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor, font: { size: 9 } } }
+                            }
+                        }
+                    });
+                }
+
+                const tbody = document.getElementById('user-traffic-history-tbody');
+                if (!list || list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-sec); padding: 20px;">暂无历史每日流量记录</td></tr>';
+                    return;
+                }
+                let html = '';
+                list.slice().reverse().forEach(item => {
+                    html += `
+                        <tr>
+                            <td><b>${item.log_date}</b></td>
+                            <td>${formatBytes(item.upload)}</td>
+                            <td>${formatBytes(item.download)}</td>
+                            <td><b style="color: var(--accent);">${formatBytes(item.total)}</b></td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = html;
+            } catch (e) {}
+        }
+
+        // 新增 / 编辑用户弹窗
+        function openCreateUserModal() {
+            document.getElementById('user-edit-id').value = '';
+            document.getElementById('user-form-name').value = '';
+            document.getElementById('user-form-pass').value = '';
+            document.getElementById('user-modal-title').innerText = '➕ 新增 Trojan 用户';
+            document.getElementById('group-quota-days').style.display = 'block';
+            document.getElementById('modal-user').style.display = 'flex';
+        }
+
+        function openEditUserModal(id, name, pass) {
+            document.getElementById('user-edit-id').value = id;
+            document.getElementById('user-form-name').value = name;
+            document.getElementById('user-form-pass').value = pass;
+            document.getElementById('user-modal-title').innerText = `✏️ 编辑用户: ${name}`;
+            document.getElementById('group-quota-days').style.display = 'none';
+            document.getElementById('modal-user').style.display = 'flex';
+        }
+
+        function generateRandomPass() {
+            const chars = 'abcdefghijkmnpqrstuvwxyz23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+            let pass = '';
+            for (let i = 0; i < 12; i++) pass += chars.charAt(Math.floor(Math.random() * chars.length));
+            document.getElementById('user-form-pass').value = pass;
+        }
+
+        async function handleSaveUser(e) {
+            e.preventDefault();
+            const id = document.getElementById('user-edit-id').value;
+            const name = document.getElementById('user-form-name').value.trim();
+            const pass = document.getElementById('user-form-pass').value.trim();
+            const quotaGb = parseInt(document.getElementById('user-form-quota').value) || 0;
+            const days = parseInt(document.getElementById('user-form-days').value) || 0;
+
+            try {
+                const formData = new FormData();
+                if (id) {
+                    formData.append('id', id);
+                    formData.append('username', name);
+                    formData.append('password', pass);
+                    await apiFetch('/trojan/user/update', { method: 'POST', body: formData });
+                    showToast(`已更新用户 ${name}`, '✅');
+                } else {
+                    formData.append('username', name);
+                    formData.append('password', pass);
+                    const res = await apiFetch('/trojan/user', { method: 'POST', body: formData });
+                    if (res && res.Msg === 'success') {
+                        if (quotaGb > 0 && res.Data) {
+                            const qData = new FormData();
+                            qData.append('id', res.Data.ID || res.Data.id);
+                            qData.append('quota', quotaGb * 1024 * 1024 * 1024);
+                            await apiFetch('/trojan/data', { method: 'POST', body: qData });
+                        }
+                        if (days > 0 && res.Data) {
+                            const dData = new FormData();
+                            dData.append('id', res.Data.ID || res.Data.id);
+                            dData.append('useDays', days);
+                            await apiFetch('/trojan/user/expire', { method: 'POST', body: dData });
+                        }
+                        showToast(`已成功创建用户 ${name}`, '🎉');
+                    } else {
+                        showToast(res.Msg || '创建失败', '⚠️');
+                    }
+                }
+                closeModals();
+                loadUsers();
+            } catch (err) {
+                showToast('保存操作失败', '❌');
+            }
+        }
+
+        async function deleteUser(id, name) {
+            if (!confirm(`确定要彻底删除用户【${name}】吗？此操作无法撤销。`)) return;
+            try {
+                await apiFetch(`/trojan/user?id=${id}`, { method: 'DELETE' });
+                showToast(`已删除用户 ${name}`, '🗑️');
+                loadUsers();
+            } catch (e) {
+                showToast('删除失败', '❌');
+            }
+        }
+
+        // 内核与系统设置
+        async function loadSettings() {
+            try {
+                const rRes = await apiFetch('/trojan/data/resetDay');
+                if (rRes && rRes.Data) {
+                    document.getElementById('settings-reset-day').value = rRes.Data.resetDay || 1;
+                }
+                const lRes = await apiFetch('/trojan/loglevel');
+                if (lRes && lRes.Data != null) {
+                    document.getElementById('settings-loglevel-select').value = lRes.Data;
+                }
+            } catch (e) {}
+        }
+
+        async function switchTrojanType(tType) {
+            if (!confirm(`确定要将服务端内核热切换为【${tType}】吗？核心将自动重启生效。`)) return;
+            try {
+                const formData = new FormData();
+                formData.append('type', tType);
+                await apiFetch('/trojan/switch', { method: 'POST', body: formData });
+                showToast(`已切换内核为 ${tType}，正在重启服务...`, '🔄');
+                setTimeout(() => loadDashboard(), 3000);
+            } catch (e) {
+                showToast('内核切换失败', '❌');
+            }
+        }
+
+        async function changeLogLevel(lvl) {
+            try {
+                const formData = new FormData();
+                formData.append('level', lvl);
+                await apiFetch('/trojan/loglevel', { method: 'POST', body: formData });
+                showToast('已下发新日志等级', '✅');
+            } catch (e) {}
+        }
+
+        async function restartTrojanService() {
+            try {
+                await apiFetch('/trojan/restart', { method: 'POST' });
+                showToast('正在平滑重启 Trojan 服务端...', '🔄');
+            } catch (e) {
+                showToast('重启请求失败', '❌');
+            }
+        }
+
+        async function stopTrojanService() {
+            if (!confirm('确定要停止 Trojan 核心服务吗？外部所有客户端将中断连接。')) return;
+            try {
+                await apiFetch('/trojan/stop', { method: 'POST' });
+                showToast('已停止 Trojan 核心服务', '🛑');
+            } catch (e) {}
+        }
+
+        async function saveResetDay() {
+            const day = document.getElementById('settings-reset-day').value;
+            try {
+                const formData = new FormData();
+                formData.append('day', day);
+                await apiFetch('/trojan/data/resetDay', { method: 'POST', body: formData });
+                showToast(`已设置每月 ${day} 号自动重置流量`, '📅');
+            } catch (e) {}
+        }
+
+        async function saveBrandTitle() {
+            const title = document.getElementById('settings-brand-title').value.trim();
+            if (!title) return;
+            try {
+                const formData = new FormData();
+                formData.append('title', title);
+                await apiFetch('/common/loginInfo', { method: 'POST', body: formData });
+                document.getElementById('login-brand-title').innerText = title;
+                showToast('已更新控制台标题', '✅');
+            } catch (e) {}
+        }
+
+        // WebSocket 实时日志流
+        function initLogWebSocket() {
+            if (logWebSocket) return;
+            const term = document.getElementById('terminal-log-output');
+            const loc = window.location;
+            const wsUrl = `${loc.protocol === 'https:' ? 'wss:' : 'ws:'}//${loc.host}/trojan/log?token=${currentToken}`;
+            try {
+                logWebSocket = new WebSocket(wsUrl);
+                logWebSocket.onopen = () => {
+                    term.innerHTML = '<span style="color:#30d158;">[系统] WebSocket 实时日志通道连接成功</span>\n';
+                };
+                logWebSocket.onmessage = (e) => {
+                    term.innerHTML += `${escapeHtml(e.data)}\n`;
+                    if (logAutoScroll) term.scrollTop = term.scrollHeight;
+                };
+                logWebSocket.onclose = () => {
+                    term.innerHTML += '<span style="color:#ff9500;">[系统] 日志流连接已关闭</span>\n';
+                    logWebSocket = null;
+                };
+                logWebSocket.onerror = () => {
+                    term.innerHTML += '<span style="color:#ff453a;">[系统] 日志流连接异常</span>\n';
+                    logWebSocket = null;
+                };
+            } catch (e) {
+                term.innerText = '无法建立 WebSocket 连接';
+            }
+        }
+
+        function toggleLogAutoScroll() {
+            logAutoScroll = !logAutoScroll;
+            document.getElementById('btn-log-autoscroll').innerText = logAutoScroll ? '📜 自动滚屏: 开启' : '⏸️ 自动滚屏: 暂停';
+        }
+
+        function clearTerminalLogs() {
+            document.getElementById('terminal-log-output').innerText = '';
+        }
+
+        function exportUsersCSV() {
+            if (!allUsers || allUsers.length === 0) return showToast('暂无用户数据可导出', '⚠️');
+            let csv = '\uFEFF用户名,节点密码,已用上传(B),已用下载(B),总配额(B),可用天数,到期时间\n';
+            allUsers.forEach(u => {
+                csv += `"${u.Username}","${u.Password}",${u.Upload||0},${u.Download||0},${u.Quota||0},${u.UseDays||0},"${u.ExpiryDate||''}"\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `trojan_users_${new Date().toISOString().slice(0,10)}.csv`;
+            link.click();
+            showToast('已导出用户 CSV 文件', '📥');
+        }
+
+        function copyText(text, successMsg = '已复制到剪贴板') {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => showToast(successMsg, '📋'));
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+                showToast(successMsg, '📋');
+            }
+        }
+
+        function closeModals() {
+            document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
+        }
+
+        // 启动验证
+        checkAuth();
+    </script>
+</body>
+</html>

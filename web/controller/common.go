@@ -1,13 +1,17 @@
 package controller
 
 import (
+	"crypto/x509"
+	"encoding/pem"
+	"os"
+	"time"
+
 	"github.com/robfig/cron/v3"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
-	"time"
 	"trojan/asset"
 	"trojan/core"
 	"trojan/trojan"
@@ -162,5 +166,47 @@ func ServerInfo() *ResponseBody {
 		"speed":    si,
 		"netCount": netCount,
 	}
+	return &responseBody
+}
+
+// CertInfo 获取TLS证书详细信息与到期天数
+func CertInfo() *ResponseBody {
+	responseBody := ResponseBody{Msg: "success"}
+	defer TimeCost(time.Now(), &responseBody)
+	config := core.GetConfig()
+	certPath := config.SSl.Cert
+	data := map[string]interface{}{
+		"certPath":      certPath,
+		"keyPath":       config.SSl.Key,
+		"exists":        false,
+		"domain":        "",
+		"issuer":        "",
+		"notBefore":     "",
+		"notAfter":      "",
+		"daysRemaining": 0,
+		"isExpired":     false,
+	}
+
+	if certPath != "" {
+		if certBytes, err := os.ReadFile(certPath); err == nil {
+			data["exists"] = true
+			block, _ := pem.Decode(certBytes)
+			if block != nil {
+				if cert, err := x509.ParseCertificate(block.Bytes); err == nil {
+					data["domain"] = cert.Subject.CommonName
+					if len(cert.DNSNames) > 0 {
+						data["dnsNames"] = cert.DNSNames
+					}
+					data["issuer"] = cert.Issuer.CommonName
+					data["notBefore"] = cert.NotBefore.Format("2006-01-02 15:04:05")
+					data["notAfter"] = cert.NotAfter.Format("2006-01-02 15:04:05")
+					days := int(time.Until(cert.NotAfter).Hours() / 24)
+					data["daysRemaining"] = days
+					data["isExpired"] = time.Now().After(cert.NotAfter)
+				}
+			}
+		}
+	}
+	responseBody.Data = data
 	return &responseBody
 }

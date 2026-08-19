@@ -8,10 +8,10 @@ import (
 	mysqlDriver "github.com/go-sql-driver/mysql"
 	"io"
 	"log"
-	"time"
-
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	// mysql sql驱动
 	_ "github.com/go-sql-driver/mysql"
@@ -50,6 +50,25 @@ type PageQuery struct {
 	DataList []*User
 }
 
+// DailyTraffic 每日流量明细结构体
+type DailyTraffic struct {
+	ID       uint   `json:"id"`
+	UserID   uint   `json:"user_id"`
+	Username string `json:"username"`
+	LogDate  string `json:"log_date"`
+	Upload   uint64 `json:"upload"`
+	Download uint64 `json:"download"`
+	Total    uint64 `json:"total"`
+}
+
+// GlobalDailyTraffic 全站每日流量汇总
+type GlobalDailyTraffic struct {
+	LogDate  string `json:"log_date"`
+	Upload   uint64 `json:"upload"`
+	Download uint64 `json:"download"`
+	Total    uint64 `json:"total"`
+}
+
 // CreateTableSql 创表sql
 var CreateTableSql = `
 CREATE TABLE IF NOT EXISTS users (
@@ -64,6 +83,19 @@ CREATE TABLE IF NOT EXISTS users (
     expiryDate char(10) DEFAULT '',
     PRIMARY KEY (id),
     INDEX (password)
+) DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS user_traffic_daily (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id INT UNSIGNED NOT NULL,
+    username VARCHAR(64) NOT NULL,
+    log_date VARCHAR(10) NOT NULL,
+    upload BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    download BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    total BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY idx_user_date (user_id, log_date),
+    INDEX idx_log_date (log_date)
 ) DEFAULT CHARSET=utf8mb4;
 `
 
@@ -80,12 +112,21 @@ func (mysql *Mysql) GetDB() *sql.DB {
 	return db
 }
 
-// CreateTable 不存在trojan user表则自动创建
+// CreateTable 不存在trojan user表及流量表则自动创建
 func (mysql *Mysql) CreateTable() {
 	db := mysql.GetDB()
+	if db == nil {
+		return
+	}
 	defer db.Close()
-	if _, err := db.Exec(CreateTableSql); err != nil {
-		fmt.Println(err)
+	queries := strings.Split(CreateTableSql, ";")
+	for _, q := range queries {
+		q = strings.TrimSpace(q)
+		if q != "" {
+			if _, err := db.Exec(q); err != nil {
+				fmt.Println("CreateTable Error:", err)
+			}
+		}
 	}
 }
 
@@ -409,4 +450,198 @@ func (mysql *Mysql) GetData(ids ...string) ([]*User, error) {
 		return nil, err
 	}
 	return userList, nil
+}
+
+var (
+	lastTrafficLock sync.Mutex
+	lastUserTraffic = make(map[uint][2]uint64)
+)
+
+// RecordTrafficSnapshot 采样并累加计算每日流量快照
+func (mysql *Mysql) RecordTrafficSnapshot() error {
+	db := mysql.GetDB()
+	if db == nil {
+		return errors.New("can't connect mysql")
+	}
+	defer db.Close()
+
+	users, err := queryUserList(db, "SELECT * FROM users")
+	if err != nil {
+		return err
+	}
+
+	today := time.Now().Format("2006-01-02")
+
+	lastTrafficLock.Lock()
+	defer lastTrafficLock.Unlock()
+
+	for _, u := range users {
+		last, exists := lastUserTraffic[u.ID]
+		var deltaUp, deltaDown uint64
+
+		if !exists {
+			lastUserTraffic[u.ID] = [2]uint64{u.Upload, u.Download}
+			deltaUp = 0
+			deltaDown = 0
+		} else {
+			if u.Upload >= last[0] {
+				deltaUp = u.Upload - last[0]
+			} else {
+				deltaUp = u.Upload
+			}
+
+			if u.Download >= last[1] {
+				deltaDown = u.Download - last[1]
+			} else {
+				deltaDown = u.Download
+			}
+			lastUserTraffic[u.ID] = [2]uint64{u.Upload, u.Download}
+		}
+
+		query := fmt.Sprintf(`
+			INSERT INTO user_traffic_daily (user_id, username, log_date, upload, download, total)
+			VALUES (%d, '%s', '%s', %d, %d, %d)
+			ON DUPLICATE KEY UPDATE
+			username = VALUES(username),
+			upload = upload + %d,
+			download = download + %d,
+			total = total + %d;
+		`, u.ID, u.Username, today, deltaUp, deltaDown, deltaUp+deltaDown, deltaUp, deltaDown, deltaUp+deltaDown)
+		db.Exec(query)
+	}
+	return nil
+}
+
+// GetGlobalDailyTraffic 获取全站近 N 天每日总流量
+func (mysql *Mysql) GetGlobalDailyTraffic(days int) ([]*GlobalDailyTraffic, error) {
+	db := mysql.GetDB()
+	if db == nil {
+		return nil, errors.New("can't connect mysql")
+	}
+	defer db.Close()
+
+	if days <= 0 {
+		days = 7
+	}
+
+	query := fmt.Sprintf(`
+		SELECT log_date, SUM(upload) as up, SUM(download) as down, SUM(total) as tot
+		FROM user_traffic_daily
+		WHERE log_date >= DATE_SUB(CURDATE(), INTERVAL %d DAY)
+		GROUP BY log_date
+		ORDER BY log_date ASC
+	`, days)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*GlobalDailyTraffic
+	for rows.Next() {
+		var logDate string
+		var up, down, tot uint64
+		if err := rows.Scan(&logDate, &up, &down, &tot); err == nil {
+			list = append(list, &GlobalDailyTraffic{
+				LogDate:  logDate,
+				Upload:   up,
+				Download: down,
+				Total:    tot,
+			})
+		}
+	}
+	return list, nil
+}
+
+// GetUserDailyTraffic 获取指定用户近 N 天每日流量明细
+func (mysql *Mysql) GetUserDailyTraffic(userID uint, days int) ([]*DailyTraffic, error) {
+	db := mysql.GetDB()
+	if db == nil {
+		return nil, errors.New("can't connect mysql")
+	}
+	defer db.Close()
+
+	if days <= 0 {
+		days = 30
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, user_id, username, log_date, upload, download, total
+		FROM user_traffic_daily
+		WHERE user_id = %d AND log_date >= DATE_SUB(CURDATE(), INTERVAL %d DAY)
+		ORDER BY log_date ASC
+	`, userID, days)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*DailyTraffic
+	for rows.Next() {
+		var id, uid uint
+		var username, logDate string
+		var up, down, tot uint64
+		if err := rows.Scan(&id, &uid, &username, &logDate, &up, &down, &tot); err == nil {
+			list = append(list, &DailyTraffic{
+				ID:       id,
+				UserID:   uid,
+				Username: username,
+				LogDate:  logDate,
+				Upload:   up,
+				Download: down,
+				Total:    tot,
+			})
+		}
+	}
+	return list, nil
+}
+
+// GetTodayTopUsers 获取今日流量消耗 TOP 用户
+func (mysql *Mysql) GetTodayTopUsers(limit int) ([]*DailyTraffic, error) {
+	db := mysql.GetDB()
+	if db == nil {
+		return nil, errors.New("can't connect mysql")
+	}
+	defer db.Close()
+
+	if limit <= 0 {
+		limit = 5
+	}
+	today := time.Now().Format("2006-01-02")
+
+	query := fmt.Sprintf(`
+		SELECT id, user_id, username, log_date, upload, download, total
+		FROM user_traffic_daily
+		WHERE log_date = '%s'
+		ORDER BY total DESC
+		LIMIT %d
+	`, today, limit)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*DailyTraffic
+	for rows.Next() {
+		var id, uid uint
+		var username, logDate string
+		var up, down, tot uint64
+		if err := rows.Scan(&id, &uid, &username, &logDate, &up, &down, &tot); err == nil {
+			list = append(list, &DailyTraffic{
+				ID:       id,
+				UserID:   uid,
+				Username: username,
+				LogDate:  logDate,
+				Upload:   up,
+				Download: down,
+				Total:    tot,
+			})
+		}
+	}
+	return list, nil
 }

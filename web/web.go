@@ -127,6 +127,21 @@ func dataRouter(router *gin.Engine) {
 		data.GET("/resetDay", func(c *gin.Context) {
 			c.JSON(200, controller.GetResetDay())
 		})
+		data.GET("/traffic/global", func(c *gin.Context) {
+			daysStr := c.DefaultQuery("days", "7")
+			days, _ := strconv.Atoi(daysStr)
+			c.JSON(200, controller.GetGlobalDailyTraffic(days))
+		})
+		data.GET("/traffic/user", func(c *gin.Context) {
+			idStr := c.Query("id")
+			daysStr := c.DefaultQuery("days", "30")
+			id, _ := strconv.Atoi(idStr)
+			days, _ := strconv.Atoi(daysStr)
+			c.JSON(200, controller.GetUserDailyTraffic(uint(id), days))
+		})
+		data.GET("/traffic/top", func(c *gin.Context) {
+			c.JSON(200, controller.GetTodayTopUsers())
+		})
 	}
 }
 
@@ -138,6 +153,9 @@ func commonRouter(router *gin.Engine) {
 		})
 		common.GET("/serverInfo", func(c *gin.Context) {
 			c.JSON(200, controller.ServerInfo())
+		})
+		common.GET("/certInfo", func(c *gin.Context) {
+			c.JSON(200, controller.CertInfo())
 		})
 		common.GET("/clashRules", func(c *gin.Context) {
 			c.JSON(200, controller.GetClashRules())
