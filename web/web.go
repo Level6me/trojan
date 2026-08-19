@@ -128,9 +128,23 @@ func dataRouter(router *gin.Engine) {
 			c.JSON(200, controller.GetResetDay())
 		})
 		data.GET("/traffic/global", func(c *gin.Context) {
+			rangeStr := c.Query("range")
+			if rangeStr == "24h" {
+				c.JSON(200, controller.GetGlobalHourlyTraffic(24))
+				return
+			}
 			daysStr := c.DefaultQuery("days", "7")
 			days, _ := strconv.Atoi(daysStr)
+			if days == 1 || days == 0 {
+				c.JSON(200, controller.GetGlobalHourlyTraffic(24))
+				return
+			}
 			c.JSON(200, controller.GetGlobalDailyTraffic(days))
+		})
+		data.GET("/traffic/hourly", func(c *gin.Context) {
+			hoursStr := c.DefaultQuery("hours", "24")
+			hours, _ := strconv.Atoi(hoursStr)
+			c.JSON(200, controller.GetGlobalHourlyTraffic(hours))
 		})
 		data.GET("/traffic/user", func(c *gin.Context) {
 			idStr := c.Query("id")

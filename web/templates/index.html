@@ -601,8 +601,8 @@
                 <button class="pill-btn" onclick="manualRefreshData()" id="refresh-data-btn" title="立即同步最新实时流量">
                     <span id="refresh-icon">🔄 刷新</span>
                 </button>
-                <button class="pill-btn" onclick="toggleTheme()" id="theme-btn" title="切换深色/浅色模式">
-                    <span id="theme-icon">🌙</span>
+                <button class="pill-btn" onclick="toggleTheme()" id="theme-btn" title="切换主题（跟随系统 / 深色 / 浅色）">
+                    <span id="theme-icon">🌓</span>
                 </button>
                 <button class="pill-btn danger" onclick="handleLogout()" title="退出登录">
                     <span>🚪 退出</span>
@@ -679,16 +679,17 @@
                     </div>
                 </div>
 
-                <!-- 全站每日流量走势图 (近7天/近30天) -->
+                <!-- 全站每日流量走势图 (24H/近7天/近30天) -->
                 <div class="card">
                     <div class="card-header">
                         <div>
                             <div class="card-title">📈 全站历史每日流量消耗</div>
-                            <div class="val-sub">每日上传与下载数据走势</div>
+                            <div class="val-sub">双向上传与下载数据走势</div>
                         </div>
                         <div class="segmented-control" style="padding: 2px;">
-                            <button class="segment-btn active" id="btn-traffic-7d" onclick="loadGlobalDailyTraffic(7, this)">近7天</button>
-                            <button class="segment-btn" id="btn-traffic-30d" onclick="loadGlobalDailyTraffic(30, this)">近30天</button>
+                            <button class="segment-btn active" id="btn-traffic-24h" onclick="loadGlobalDailyTraffic('24h', this)">24H</button>
+                            <button class="segment-btn" id="btn-traffic-7d" onclick="loadGlobalDailyTraffic('7d', this)">近7天</button>
+                            <button class="segment-btn" id="btn-traffic-30d" onclick="loadGlobalDailyTraffic('30d', this)">近30天</button>
                         </div>
                     </div>
                     <div style="height: 190px; width: 100%; position: relative;">
@@ -1133,20 +1134,67 @@
             return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         }
 
-        // 主题切换
-        function toggleTheme() {
-            const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-            document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            localStorage.setItem('trojan_theme', isDark ? 'light' : 'dark');
-            document.getElementById('theme-icon').innerText = isDark ? '☀️' : '🌙';
-            if (globalDailyChartInstance) globalDailyChartInstance.destroy();
-            loadGlobalDailyTraffic(7);
+        // 主题管理：支持 'auto' (跟随系统) / 'dark' (深色) / 'light' (浅色)
+        let currentThemeSetting = localStorage.getItem('trojan_theme') || 'auto';
+
+        function getSystemIsDark() {
+            return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         }
 
-        // 初始化主题
-        if (localStorage.getItem('trojan_theme') === 'light') {
-            document.documentElement.setAttribute('data-theme', 'light');
-            document.getElementById('theme-icon').innerText = '☀️';
+        function applyTheme(mode, reRenderCharts = true) {
+            currentThemeSetting = mode;
+            localStorage.setItem('trojan_theme', mode);
+
+            let effectiveTheme = mode;
+            if (mode === 'auto') {
+                effectiveTheme = getSystemIsDark() ? 'dark' : 'light';
+            }
+
+            document.documentElement.setAttribute('data-theme', effectiveTheme);
+
+            const themeIcon = document.getElementById('theme-icon');
+            const themeBtn = document.getElementById('theme-btn');
+            if (themeIcon) {
+                if (mode === 'auto') {
+                    themeIcon.innerText = '🌓';
+                    if (themeBtn) themeBtn.title = '当前：跟随系统（点击切换为深色模式）';
+                } else if (mode === 'dark') {
+                    themeIcon.innerText = '🌙';
+                    if (themeBtn) themeBtn.title = '当前：深色模式（点击切换为浅色模式）';
+                } else {
+                    themeIcon.innerText = '☀️';
+                    if (themeBtn) themeBtn.title = '当前：浅色模式（点击切换为跟随系统）';
+                }
+            }
+
+            if (reRenderCharts && globalDailyChartInstance) {
+                loadGlobalDailyTraffic(currentTrafficRange);
+            }
+        }
+
+        function toggleTheme() {
+            if (currentThemeSetting === 'auto') {
+                applyTheme('dark');
+                showToast('已切换至 深色模式', '🌙');
+            } else if (currentThemeSetting === 'dark') {
+                applyTheme('light');
+                showToast('已切换至 浅色模式', '☀️');
+            } else {
+                applyTheme('auto');
+                showToast('已切换至 跟随系统自动模式', '🌓');
+            }
+        }
+
+        // 初始化应用主题
+        applyTheme(currentThemeSetting, false);
+
+        // 监听系统颜色偏好变化（仅在 auto 模式下自动生效）
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                if (currentThemeSetting === 'auto') {
+                    applyTheme('auto', true);
+                }
+            });
         }
 
         // 统一 API 请求封装
@@ -1337,7 +1385,7 @@
                     document.getElementById('btn-type-trojan').classList.toggle('active', vd.trojanType !== 'trojan-go');
                     document.getElementById('btn-type-trojan-go').classList.toggle('active', vd.trojanType === 'trojan-go');
                 }
-                loadGlobalDailyTraffic(7);
+                loadGlobalDailyTraffic(currentTrafficRange);
                 loadTopUsers();
             } catch (e) {}
         }
@@ -1379,19 +1427,44 @@
             } catch (e) {}
         }
 
-        // 全站每日流量面积图
-        async function loadGlobalDailyTraffic(days = 7, btn = null) {
-            if (btn) {
-                document.getElementById('btn-traffic-7d').classList.toggle('active', days === 7);
-                document.getElementById('btn-traffic-30d').classList.toggle('active', days === 30);
-            }
+        // 全站每日与小时流量走势面积图
+        let currentTrafficRange = '24h';
+
+        async function loadGlobalDailyTraffic(range = '24h', btn = null) {
+            currentTrafficRange = range;
+            const btn24h = document.getElementById('btn-traffic-24h');
+            const btn7d = document.getElementById('btn-traffic-7d');
+            const btn30d = document.getElementById('btn-traffic-30d');
+            if (btn24h) btn24h.classList.toggle('active', range === '24h' || range === 1 || range === 0);
+            if (btn7d) btn7d.classList.toggle('active', range === '7d' || range === 7);
+            if (btn30d) btn30d.classList.toggle('active', range === '30d' || range === 30);
+
             try {
-                const res = await apiFetch(`/trojan/data/traffic/global?days=${days}`);
+                let url = `/trojan/data/traffic/global?range=${range}`;
+                if (range === '7d' || range === 7) url = '/trojan/data/traffic/global?days=7';
+                else if (range === '30d' || range === 30) url = '/trojan/data/traffic/global?days=30';
+                else url = '/trojan/data/traffic/hourly?hours=24';
+
+                const res = await apiFetch(url);
                 const list = (res && res.Data) ? res.Data : [];
-                
-                const labels = list.map(x => x.log_date ? x.log_date.slice(5) : '');
-                const upData = list.map(x => (x.upload / (1024*1024*1024)).toFixed(2));
-                const downData = list.map(x => (x.download / (1024*1024*1024)).toFixed(2));
+
+                const labels = list.map(x => {
+                    if (x.log_time) return x.log_time;
+                    if (x.log_date) return x.log_date.slice(5);
+                    return '';
+                });
+
+                const rawUp = list.map(x => Number(x.upload) || 0);
+                const rawDown = list.map(x => Number(x.download) || 0);
+                const maxVal = Math.max(...rawUp, ...rawDown, 0);
+
+                // 动态自适应单位：流量大于等于 1GB 时以 GB 为单位，否则以 MB 为单位，避免小流量显示为 0.00
+                const useGB = maxVal >= (1024 * 1024 * 1024);
+                const divisor = useGB ? (1024 * 1024 * 1024) : (1024 * 1024);
+                const unitLabel = useGB ? 'GB' : 'MB';
+
+                const upData = rawUp.map(v => (v / divisor).toFixed(2));
+                const downData = rawDown.map(v => (v / divisor).toFixed(2));
 
                 const ctx = document.getElementById('chart-daily-traffic')?.getContext('2d');
                 if (!ctx) return;
@@ -1408,38 +1481,60 @@
                         labels: labels.length ? labels : ['暂无数据'],
                         datasets: [
                             {
-                                label: '下载流量 (GB)',
+                                label: `下载流量 (${unitLabel})`,
                                 data: downData.length ? downData : [0],
+                                rawBytes: rawDown,
                                 borderColor: '#30d158',
                                 backgroundColor: 'rgba(48, 209, 88, 0.15)',
                                 fill: true,
                                 tension: 0.35,
-                                borderWidth: 2
+                                borderWidth: 2,
+                                pointRadius: (range === 30 || range === '30d' ? 1.5 : 3),
+                                pointHoverRadius: 5
                             },
                             {
-                                label: '上传流量 (GB)',
+                                label: `上传流量 (${unitLabel})`,
                                 data: upData.length ? upData : [0],
+                                rawBytes: rawUp,
                                 borderColor: '#0a84ff',
                                 backgroundColor: 'rgba(10, 132, 255, 0.12)',
                                 fill: true,
                                 tension: 0.35,
-                                borderWidth: 2
+                                borderWidth: 2,
+                                pointRadius: (range === 30 || range === '30d' ? 1.5 : 3),
+                                pointHoverRadius: 5
                             }
                         ]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
                         plugins: {
-                            legend: { position: 'top', labels: { color: textColor, font: { size: 10, weight: 600 }, boxWidth: 10 } }
+                            legend: { position: 'top', labels: { color: textColor, font: { size: 10, weight: 600 }, boxWidth: 10 } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const raw = (context.dataset.rawBytes && context.dataset.rawBytes[context.dataIndex] !== undefined)
+                                            ? context.dataset.rawBytes[context.dataIndex]
+                                            : (Number(context.parsed.y) * divisor);
+                                        return `${context.dataset.label.split(' ')[0]}: ${formatBytes(raw)}`;
+                                    }
+                                }
+                            }
                         },
                         scales: {
-                            x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 } } },
+                            x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 }, maxRotation: 0 } },
                             y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 } } }
                         }
                     }
                 });
-            } catch (e) {}
+            } catch (e) {
+                console.error('loadGlobalDailyTraffic error', e);
+            }
         }
 
         // 今日 TOP 用户排行

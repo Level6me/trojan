@@ -69,6 +69,14 @@ type GlobalDailyTraffic struct {
 	Total    uint64 `json:"total"`
 }
 
+// GlobalHourlyTraffic 全站小时级流量汇总
+type GlobalHourlyTraffic struct {
+	LogTime  string `json:"log_time"` // 格式 "15:00"
+	Upload   uint64 `json:"upload"`
+	Download uint64 `json:"download"`
+	Total    uint64 `json:"total"`
+}
+
 // CreateTableSql 创表sql
 var CreateTableSql = `
 CREATE TABLE IF NOT EXISTS users (
@@ -96,6 +104,19 @@ CREATE TABLE IF NOT EXISTS user_traffic_daily (
     PRIMARY KEY (id),
     UNIQUE KEY idx_user_date (user_id, log_date),
     INDEX idx_log_date (log_date)
+) DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS user_traffic_hourly (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id INT UNSIGNED NOT NULL,
+    username VARCHAR(64) NOT NULL,
+    log_time VARCHAR(16) NOT NULL,
+    upload BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    download BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    total BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY idx_user_hour (user_id, log_time),
+    INDEX idx_log_hour (log_time)
 ) DEFAULT CHARSET=utf8mb4;
 `
 
@@ -457,7 +478,7 @@ var (
 	lastUserTraffic = make(map[uint][2]uint64)
 )
 
-// RecordTrafficSnapshot 采样并累加计算每日流量快照
+// RecordTrafficSnapshot 采样并累加计算每日与每小时流量快照
 func (mysql *Mysql) RecordTrafficSnapshot() error {
 	db := mysql.GetDB()
 	if db == nil {
@@ -470,7 +491,9 @@ func (mysql *Mysql) RecordTrafficSnapshot() error {
 		return err
 	}
 
-	today := time.Now().Format("2006-01-02")
+	now := time.Now()
+	today := now.Format("2006-01-02")
+	thisHour := now.Format("2006-01-02 15:00")
 
 	lastTrafficLock.Lock()
 	defer lastTrafficLock.Unlock()
@@ -498,7 +521,8 @@ func (mysql *Mysql) RecordTrafficSnapshot() error {
 			lastUserTraffic[u.ID] = [2]uint64{u.Upload, u.Download}
 		}
 
-		query := fmt.Sprintf(`
+		// 写入每日流量表
+		queryDaily := fmt.Sprintf(`
 			INSERT INTO user_traffic_daily (user_id, username, log_date, upload, download, total)
 			VALUES (%d, '%s', '%s', %d, %d, %d)
 			ON DUPLICATE KEY UPDATE
@@ -507,12 +531,24 @@ func (mysql *Mysql) RecordTrafficSnapshot() error {
 			download = download + %d,
 			total = total + %d;
 		`, u.ID, u.Username, today, deltaUp, deltaDown, deltaUp+deltaDown, deltaUp, deltaDown, deltaUp+deltaDown)
-		db.Exec(query)
+		db.Exec(queryDaily)
+
+		// 写入每小时流量表
+		queryHourly := fmt.Sprintf(`
+			INSERT INTO user_traffic_hourly (user_id, username, log_time, upload, download, total)
+			VALUES (%d, '%s', '%s', %d, %d, %d)
+			ON DUPLICATE KEY UPDATE
+			username = VALUES(username),
+			upload = upload + %d,
+			download = download + %d,
+			total = total + %d;
+		`, u.ID, u.Username, thisHour, deltaUp, deltaDown, deltaUp+deltaDown, deltaUp, deltaDown, deltaUp+deltaDown)
+		db.Exec(queryHourly)
 	}
 	return nil
 }
 
-// GetGlobalDailyTraffic 获取全站近 N 天每日总流量
+// GetGlobalDailyTraffic 获取全站近 N 天每日总流量（自动补齐连续日期）
 func (mysql *Mysql) GetGlobalDailyTraffic(days int) ([]*GlobalDailyTraffic, error) {
 	db := mysql.GetDB()
 	if db == nil {
@@ -524,13 +560,14 @@ func (mysql *Mysql) GetGlobalDailyTraffic(days int) ([]*GlobalDailyTraffic, erro
 		days = 7
 	}
 
+	startDate := time.Now().AddDate(0, 0, -(days - 1)).Format("2006-01-02")
 	query := fmt.Sprintf(`
 		SELECT log_date, SUM(upload) as up, SUM(download) as down, SUM(total) as tot
 		FROM user_traffic_daily
-		WHERE log_date >= DATE_SUB(CURDATE(), INTERVAL %d DAY)
+		WHERE log_date >= '%s'
 		GROUP BY log_date
 		ORDER BY log_date ASC
-	`, days)
+	`, startDate)
 
 	rows, err := db.Query(query)
 	if err != nil {
@@ -538,23 +575,103 @@ func (mysql *Mysql) GetGlobalDailyTraffic(days int) ([]*GlobalDailyTraffic, erro
 	}
 	defer rows.Close()
 
-	var list []*GlobalDailyTraffic
+	dataMap := make(map[string]*GlobalDailyTraffic)
 	for rows.Next() {
 		var logDate string
 		var up, down, tot uint64
 		if err := rows.Scan(&logDate, &up, &down, &tot); err == nil {
-			list = append(list, &GlobalDailyTraffic{
+			dataMap[logDate] = &GlobalDailyTraffic{
 				LogDate:  logDate,
 				Upload:   up,
 				Download: down,
 				Total:    tot,
+			}
+		}
+	}
+
+	// 补齐连续 days 天平滑数据
+	now := time.Now()
+	var list []*GlobalDailyTraffic
+	for i := days - 1; i >= 0; i-- {
+		dStr := now.AddDate(0, 0, -i).Format("2006-01-02")
+		if item, ok := dataMap[dStr]; ok {
+			list = append(list, item)
+		} else {
+			list = append(list, &GlobalDailyTraffic{
+				LogDate:  dStr,
+				Upload:   0,
+				Download: 0,
+				Total:    0,
 			})
 		}
 	}
 	return list, nil
 }
 
-// GetUserDailyTraffic 获取指定用户近 N 天每日流量明细
+// GetGlobalHourlyTraffic 获取全站近 N 小时每小时总流量（自动补齐 24 小时整点连续序列）
+func (mysql *Mysql) GetGlobalHourlyTraffic(hours int) ([]*GlobalHourlyTraffic, error) {
+	db := mysql.GetDB()
+	if db == nil {
+		return nil, errors.New("can't connect mysql")
+	}
+	defer db.Close()
+
+	if hours <= 0 {
+		hours = 24
+	}
+
+	now := time.Now()
+	startHour := now.Add(-time.Duration(hours-1) * time.Hour).Format("2006-01-02 15:00")
+	query := fmt.Sprintf(`
+		SELECT log_time, SUM(upload) as up, SUM(download) as down, SUM(total) as tot
+		FROM user_traffic_hourly
+		WHERE log_time >= '%s'
+		GROUP BY log_time
+		ORDER BY log_time ASC
+	`, startHour)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	dataMap := make(map[string]*GlobalHourlyTraffic)
+	for rows.Next() {
+		var logTime string
+		var up, down, tot uint64
+		if err := rows.Scan(&logTime, &up, &down, &tot); err == nil {
+			dataMap[logTime] = &GlobalHourlyTraffic{
+				LogTime:  logTime,
+				Upload:   up,
+				Download: down,
+				Total:    tot,
+			}
+		}
+	}
+
+	// 补齐连续 hours 小时整点平滑数据
+	var list []*GlobalHourlyTraffic
+	for i := hours - 1; i >= 0; i-- {
+		t := now.Add(-time.Duration(i) * time.Hour)
+		fullStr := t.Format("2006-01-02 15:00")
+		labelStr := t.Format("15:00")
+		if item, ok := dataMap[fullStr]; ok {
+			item.LogTime = labelStr
+			list = append(list, item)
+		} else {
+			list = append(list, &GlobalHourlyTraffic{
+				LogTime:  labelStr,
+				Upload:   0,
+				Download: 0,
+				Total:    0,
+			})
+		}
+	}
+	return list, nil
+}
+
+// GetUserDailyTraffic 获取指定用户近 N 天每日流量明细（自动补齐连续日期）
 func (mysql *Mysql) GetUserDailyTraffic(userID uint, days int) ([]*DailyTraffic, error) {
 	db := mysql.GetDB()
 	if db == nil {
@@ -566,12 +683,13 @@ func (mysql *Mysql) GetUserDailyTraffic(userID uint, days int) ([]*DailyTraffic,
 		days = 30
 	}
 
+	startDate := time.Now().AddDate(0, 0, -(days - 1)).Format("2006-01-02")
 	query := fmt.Sprintf(`
 		SELECT id, user_id, username, log_date, upload, download, total
 		FROM user_traffic_daily
-		WHERE user_id = %d AND log_date >= DATE_SUB(CURDATE(), INTERVAL %d DAY)
+		WHERE user_id = %d AND log_date >= '%s'
 		ORDER BY log_date ASC
-	`, userID, days)
+	`, userID, startDate)
 
 	rows, err := db.Query(query)
 	if err != nil {
@@ -579,13 +697,15 @@ func (mysql *Mysql) GetUserDailyTraffic(userID uint, days int) ([]*DailyTraffic,
 	}
 	defer rows.Close()
 
-	var list []*DailyTraffic
+	dataMap := make(map[string]*DailyTraffic)
+	var userName string
 	for rows.Next() {
 		var id, uid uint
 		var username, logDate string
 		var up, down, tot uint64
 		if err := rows.Scan(&id, &uid, &username, &logDate, &up, &down, &tot); err == nil {
-			list = append(list, &DailyTraffic{
+			userName = username
+			dataMap[logDate] = &DailyTraffic{
 				ID:       id,
 				UserID:   uid,
 				Username: username,
@@ -593,6 +713,25 @@ func (mysql *Mysql) GetUserDailyTraffic(userID uint, days int) ([]*DailyTraffic,
 				Upload:   up,
 				Download: down,
 				Total:    tot,
+			}
+		}
+	}
+
+	now := time.Now()
+	var list []*DailyTraffic
+	for i := days - 1; i >= 0; i-- {
+		dStr := now.AddDate(0, 0, -i).Format("2006-01-02")
+		if item, ok := dataMap[dStr]; ok {
+			list = append(list, item)
+		} else {
+			list = append(list, &DailyTraffic{
+				ID:       0,
+				UserID:   userID,
+				Username: userName,
+				LogDate:  dStr,
+				Upload:   0,
+				Download: 0,
+				Total:    0,
 			})
 		}
 	}

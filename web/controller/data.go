@@ -92,6 +92,21 @@ func GetGlobalDailyTraffic(days int) *ResponseBody {
 	return &responseBody
 }
 
+// GetGlobalHourlyTraffic 获取全站近 N 小时流量
+func GetGlobalHourlyTraffic(hours int) *ResponseBody {
+	responseBody := ResponseBody{Msg: "success"}
+	defer TimeCost(time.Now(), &responseBody)
+	mysql := core.GetMysql()
+	// 查询前即时计算并写入最新流量增量
+	_ = mysql.RecordTrafficSnapshot()
+	list, err := mysql.GetGlobalHourlyTraffic(hours)
+	if err != nil {
+		responseBody.Msg = err.Error()
+	}
+	responseBody.Data = list
+	return &responseBody
+}
+
 // GetUserDailyTraffic 获取指定用户每日流量
 func GetUserDailyTraffic(userID uint, days int) *ResponseBody {
 	responseBody := ResponseBody{Msg: "success"}
