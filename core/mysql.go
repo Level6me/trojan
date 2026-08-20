@@ -479,6 +479,42 @@ func (mysql *Mysql) CleanDataByName(usernames []string) error {
 	return nil
 }
 
+// UpdateUserLastIPByHashPrefix 根据密码哈希前缀更新最近活跃IP与时间
+func (mysql *Mysql) UpdateUserLastIPByHashPrefix(hashPrefix, ip, activeTime string) error {
+	if hashPrefix == "" || ip == "" {
+		return nil
+	}
+	db := mysql.GetDB()
+	if db == nil {
+		return errors.New("can't connect mysql")
+	}
+	defer db.Close()
+	if activeTime == "" {
+		activeTime = time.Now().Format("2006-01-02 15:04:05")
+	}
+	query := fmt.Sprintf("UPDATE users SET lastIP='%s', lastActiveTime='%s' WHERE password LIKE '%s%%'", ip, activeTime, hashPrefix)
+	_, err := db.Exec(query)
+	return err
+}
+
+// UpdateUserLastIPByUsername 根据用户名更新最近活跃IP与时间
+func (mysql *Mysql) UpdateUserLastIPByUsername(username, ip, activeTime string) error {
+	if username == "" || ip == "" {
+		return nil
+	}
+	db := mysql.GetDB()
+	if db == nil {
+		return errors.New("can't connect mysql")
+	}
+	defer db.Close()
+	if activeTime == "" {
+		activeTime = time.Now().Format("2006-01-02 15:04:05")
+	}
+	query := fmt.Sprintf("UPDATE users SET lastIP='%s', lastActiveTime='%s' WHERE BINARY username='%s'", ip, activeTime, username)
+	_, err := db.Exec(query)
+	return err
+}
+
 // GetUserByName 通过用户名来获取用户
 func (mysql *Mysql) GetUserByName(name string) *User {
 	db := mysql.GetDB()

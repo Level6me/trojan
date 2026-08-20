@@ -142,12 +142,13 @@ func ScheduleTask() {
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	c = cron.New(cron.WithLocation(loc))
 	
-	// 启动时立即执行一次流量快照
+	// 启动时立即执行一次流量快照与日志监听
 	go func() {
 		time.Sleep(1 * time.Second)
 		mysql := core.GetMysql()
 		mysql.CreateTable()
 		mysql.RecordTrafficSnapshot()
+		core.StartLogWatcher()
 	}()
 
 	// 每 30 秒高频采样一次每日流量增量
