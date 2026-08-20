@@ -410,8 +410,24 @@
             outline: none;
             transition: border-color 0.2s ease;
             font-family: inherit;
+            box-sizing: border-box;
         }
         .form-control:focus { border-color: var(--accent); }
+        input[type="date"] {
+            color-scheme: light dark;
+            -webkit-appearance: none;
+            min-height: 38px;
+        }
+        [data-theme="dark"] input[type="date"] {
+            color-scheme: dark;
+        }
+        [data-theme="light"] input[type="date"] {
+            color-scheme: light;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            opacity: 0.75;
+        }
         .form-label {
             font-size: 12px;
             font-weight: 600;
@@ -1250,8 +1266,11 @@
                     </div>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin-bottom: 8px;">
-                    <input type="date" id="ud-expiry-input" class="form-control" style="font-size: 12px;">
-                    <button class="pill-btn accent" onclick="saveUserExpiryInDetail()">💾 保存到期时间</button>
+                    <div style="position: relative; display: flex; align-items: center; width: 100%;">
+                        <input type="date" id="ud-expiry-input" class="form-control" style="font-size: 13px; height: 38px; padding-left: 36px; color: var(--text); background: var(--card); border: 1px solid var(--border); width: 100%;" onchange="document.getElementById('ud-expiry-desc').innerText = this.value ? `将设定为: ${this.value} 到期` : '将设定为: 永久有效'">
+                        <span style="position: absolute; left: 12px; pointer-events: none; font-size: 14px; opacity: 0.7;">📅</span>
+                    </div>
+                    <button class="pill-btn accent" onclick="saveUserExpiryInDetail()" style="height: 38px; white-space: nowrap; padding: 0 14px;">💾 保存到期时间</button>
                 </div>
                 <!-- 快捷天数预设 -->
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
@@ -1272,11 +1291,12 @@
                     </div>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin-bottom: 8px;">
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                        <input type="number" id="ud-speed-input" class="form-control" placeholder="0" min="0" step="1" style="font-size: 12px;">
-                        <span style="font-size: 12px; color: var(--text-sec); font-weight: 600; white-space: nowrap;">MB/s</span>
+                    <div style="position: relative; display: flex; align-items: center; width: 100%;">
+                        <input type="number" id="ud-speed-input" class="form-control" placeholder="0 (输入数值或点击下方预设)" min="0" step="1" style="font-size: 13px; height: 38px; padding-left: 36px; padding-right: 52px; color: var(--text); background: var(--card); border: 1px solid var(--border); width: 100%;" oninput="const v = parseFloat(this.value)||0; document.getElementById('ud-speed-desc').innerText = v > 0 ? `将设定为: ${v} MB/s (${v * 1024} KB/s)` : '将设定为: 不限速'">
+                        <span style="position: absolute; left: 12px; pointer-events: none; font-size: 14px; opacity: 0.7;">⚡</span>
+                        <span style="position: absolute; right: 12px; pointer-events: none; font-size: 11px; color: var(--text-sec); font-weight: 700;">MB/s</span>
                     </div>
-                    <button class="pill-btn accent" onclick="saveUserSpeedInDetail()">💾 保存限速</button>
+                    <button class="pill-btn accent" onclick="saveUserSpeedInDetail()" style="height: 38px; white-space: nowrap; padding: 0 14px;">💾 保存限速</button>
                 </div>
                 <!-- 快捷限速预设 -->
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
