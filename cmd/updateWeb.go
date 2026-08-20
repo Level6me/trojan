@@ -10,7 +10,7 @@ var updateWebCmd = &cobra.Command{
 	Use:   "updateWeb",
 	Short: "更新trojan管理程序",
 	Run: func(cmd *cobra.Command, args []string) {
-		util.RunWebShell("https://git.io/trojan-install")
+		util.RunWebShell("https://raw.githubusercontent.com/Level6me/trojan/main/update.sh")
 	},
 }
 

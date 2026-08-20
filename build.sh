@@ -1,8 +1,8 @@
 #!/bin/bash
 
-github_token=""
+github_token="${GITHUB_TOKEN:-}"
 
-project="Jrohy/trojan"
+project="Level6me/trojan"
 
 #获取当前的这个脚本所在绝对路径
 shell_path=$(cd `dirname $0`; pwd)
