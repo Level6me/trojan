@@ -49,6 +49,21 @@ func userRouter(router *gin.Engine) {
 			useDays, _ := strconv.Atoi(sDays)
 			c.JSON(200, controller.SetExpire(uint(id), uint(useDays)))
 		})
+		user.POST("/expiryDate", func(c *gin.Context) {
+			sid := c.PostForm("id")
+			expiryDate := c.PostForm("expiryDate")
+			sDays := c.DefaultPostForm("useDays", "0")
+			id, _ := strconv.Atoi(sid)
+			useDays, _ := strconv.Atoi(sDays)
+			c.JSON(200, controller.SetExpiryDate(uint(id), expiryDate, uint(useDays)))
+		})
+		user.POST("/speed", func(c *gin.Context) {
+			sid := c.PostForm("id")
+			sSpeed := c.PostForm("speedLimit")
+			id, _ := strconv.Atoi(sid)
+			speed, _ := strconv.Atoi(sSpeed)
+			c.JSON(200, controller.SetSpeedLimit(uint(id), speed))
+		})
 		user.DELETE("/expire", func(c *gin.Context) {
 			sid := c.Query("id")
 			id, _ := strconv.Atoi(sid)

@@ -30,15 +30,20 @@ type Mysql struct {
 
 // User 用户表记录结构体
 type User struct {
-	ID          uint
-	Username    string
-	Password    string
-	EncryptPass string
-	Quota       int64
-	Download    uint64
-	Upload      uint64
-	UseDays     uint
-	ExpiryDate  string
+	ID             uint   `json:"ID"`
+	Username       string `json:"Username"`
+	Password       string `json:"Password"`
+	EncryptPass    string `json:"EncryptPass"`
+	Quota          int64  `json:"Quota"`
+	Download       uint64 `json:"Download"`
+	Upload         uint64 `json:"Upload"`
+	UseDays        uint   `json:"UseDays"`
+	ExpiryDate     string `json:"ExpiryDate"`
+	SpeedLimit     int    `json:"SpeedLimit"`     // 限速（KB/s，0为不限速）
+	LastActiveTime string `json:"LastActiveTime"` // 历史使用日期时间
+	LastIP         string `json:"LastIP"`         // 历史使用IP
+	PeakDownSpeed  uint64 `json:"PeakDownSpeed"`  // 历史最高下载速率 (B/s)
+	PeakUpSpeed    uint64 `json:"PeakUpSpeed"`    // 历史最高上传速率 (B/s)
 }
 
 // PageQuery 分页查询的结构体
@@ -89,6 +94,11 @@ CREATE TABLE IF NOT EXISTS users (
     upload BIGINT UNSIGNED NOT NULL DEFAULT 0,
     useDays int(10) DEFAULT 0,
     expiryDate char(10) DEFAULT '',
+    speedLimit INT DEFAULT 0,
+    lastActiveTime VARCHAR(32) DEFAULT '',
+    lastIP VARCHAR(255) DEFAULT '',
+    peakDownSpeed BIGINT UNSIGNED DEFAULT 0,
+    peakUpSpeed BIGINT UNSIGNED DEFAULT 0,
     PRIMARY KEY (id),
     INDEX (password)
 ) DEFAULT CHARSET=utf8mb4;
@@ -133,6 +143,10 @@ func (mysql *Mysql) GetDB() *sql.DB {
 	return db
 }
 
+func addColumnIfNotExists(db *sql.DB, tableName, colName, colType string) {
+	_, _ = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s;", tableName, colName, colType))
+}
+
 // CreateTable 不存在trojan user表及流量表则自动创建
 func (mysql *Mysql) CreateTable() {
 	db := mysql.GetDB()
@@ -149,19 +163,33 @@ func (mysql *Mysql) CreateTable() {
 			}
 		}
 	}
+
+	// 自动拓展新增字段（平滑兼容旧版本数据表）
+	addColumnIfNotExists(db, "users", "speedLimit", "INT DEFAULT 0")
+	addColumnIfNotExists(db, "users", "lastActiveTime", "VARCHAR(32) DEFAULT ''")
+	addColumnIfNotExists(db, "users", "lastIP", "VARCHAR(255) DEFAULT ''")
+	addColumnIfNotExists(db, "users", "peakDownSpeed", "BIGINT UNSIGNED DEFAULT 0")
+	addColumnIfNotExists(db, "users", "peakUpSpeed", "BIGINT UNSIGNED DEFAULT 0")
 }
+
+const selectUserFields = "id, username, password, passwordShow, quota, download, upload, useDays, expiryDate, COALESCE(speedLimit, 0), COALESCE(lastActiveTime, ''), COALESCE(lastIP, ''), COALESCE(peakDownSpeed, 0), COALESCE(peakUpSpeed, 0)"
 
 func queryUserList(db *sql.DB, sql string) ([]*User, error) {
 	var (
-		username    string
-		encryptPass string
-		passShow    string
-		download    uint64
-		upload      uint64
-		quota       int64
-		id          uint
-		useDays     uint
-		expiryDate  string
+		username       string
+		encryptPass    string
+		passShow       string
+		download       uint64
+		upload         uint64
+		quota          int64
+		id             uint
+		useDays        uint
+		expiryDate     string
+		speedLimit     int
+		lastActiveTime string
+		lastIP         string
+		peakDownSpeed  uint64
+		peakUpSpeed    uint64
 	)
 	var userList []*User
 	rows, err := db.Query(sql)
@@ -170,19 +198,24 @@ func queryUserList(db *sql.DB, sql string) ([]*User, error) {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		if err := rows.Scan(&id, &username, &encryptPass, &passShow, &quota, &download, &upload, &useDays, &expiryDate); err != nil {
+		if err := rows.Scan(&id, &username, &encryptPass, &passShow, &quota, &download, &upload, &useDays, &expiryDate, &speedLimit, &lastActiveTime, &lastIP, &peakDownSpeed, &peakUpSpeed); err != nil {
 			return nil, err
 		}
 		userList = append(userList, &User{
-			ID:          id,
-			Username:    username,
-			Password:    passShow,
-			EncryptPass: encryptPass,
-			Download:    download,
-			Upload:      upload,
-			Quota:       quota,
-			UseDays:     useDays,
-			ExpiryDate:  expiryDate,
+			ID:             id,
+			Username:       username,
+			Password:       passShow,
+			EncryptPass:    encryptPass,
+			Download:       download,
+			Upload:         upload,
+			Quota:          quota,
+			UseDays:        useDays,
+			ExpiryDate:     expiryDate,
+			SpeedLimit:     speedLimit,
+			LastActiveTime: lastActiveTime,
+			LastIP:         lastIP,
+			PeakDownSpeed:  peakDownSpeed,
+			PeakUpSpeed:    peakUpSpeed,
 		})
 	}
 	return userList, nil
@@ -190,21 +223,41 @@ func queryUserList(db *sql.DB, sql string) ([]*User, error) {
 
 func queryUser(db *sql.DB, sql string) (*User, error) {
 	var (
-		username    string
-		encryptPass string
-		passShow    string
-		download    uint64
-		upload      uint64
-		quota       int64
-		id          uint
-		useDays     uint
-		expiryDate  string
+		username       string
+		encryptPass    string
+		passShow       string
+		download       uint64
+		upload         uint64
+		quota          int64
+		id             uint
+		useDays        uint
+		expiryDate     string
+		speedLimit     int
+		lastActiveTime string
+		lastIP         string
+		peakDownSpeed  uint64
+		peakUpSpeed    uint64
 	)
 	row := db.QueryRow(sql)
-	if err := row.Scan(&id, &username, &encryptPass, &passShow, &quota, &download, &upload, &useDays, &expiryDate); err != nil {
+	if err := row.Scan(&id, &username, &encryptPass, &passShow, &quota, &download, &upload, &useDays, &expiryDate, &speedLimit, &lastActiveTime, &lastIP, &peakDownSpeed, &peakUpSpeed); err != nil {
 		return nil, err
 	}
-	return &User{ID: id, Username: username, Password: passShow, EncryptPass: encryptPass, Download: download, Upload: upload, Quota: quota, UseDays: useDays, ExpiryDate: expiryDate}, nil
+	return &User{
+		ID:             id,
+		Username:       username,
+		Password:       passShow,
+		EncryptPass:    encryptPass,
+		Download:       download,
+		Upload:         upload,
+		Quota:          quota,
+		UseDays:        useDays,
+		ExpiryDate:     expiryDate,
+		SpeedLimit:     speedLimit,
+		LastActiveTime: lastActiveTime,
+		LastIP:         lastIP,
+		PeakDownSpeed:  peakDownSpeed,
+		PeakUpSpeed:    peakUpSpeed,
+	}, nil
 }
 
 // CreateUser 创建Trojan用户
@@ -263,7 +316,7 @@ func (mysql *Mysql) MonthlyResetData() error {
 		return errors.New("can't connect mysql")
 	}
 	defer db.Close()
-	userList, err := queryUserList(db, "SELECT * FROM users WHERE useDays != 0 AND quota != 0")
+	userList, err := queryUserList(db, fmt.Sprintf("SELECT %s FROM users WHERE useDays != 0 AND quota != 0", selectUserFields))
 	if err != nil {
 		return err
 	}
@@ -291,7 +344,7 @@ func (mysql *Mysql) DailyCheckExpire() (bool, error) {
 		return false, errors.New("can't connect mysql")
 	}
 	defer db.Close()
-	userList, err := queryUserList(db, "SELECT * FROM users WHERE quota != 0")
+	userList, err := queryUserList(db, fmt.Sprintf("SELECT %s FROM users WHERE quota != 0", selectUserFields))
 	if err != nil {
 		return false, err
 	}
@@ -341,6 +394,34 @@ func (mysql *Mysql) SetExpire(id uint, useDays uint) error {
 	}
 	defer db.Close()
 	if _, err := db.Exec(fmt.Sprintf("UPDATE users SET useDays=%d, expiryDate='%s' WHERE id=%d;", useDays, expiryDate, id)); err != nil {
+		fmt.Println(err)
+		return err
+	}
+	return nil
+}
+
+// SetExpiryDate 直接设置到期日期与天数
+func (mysql *Mysql) SetExpiryDate(id uint, expiryDate string, useDays uint) error {
+	db := mysql.GetDB()
+	if db == nil {
+		return errors.New("can't connect mysql")
+	}
+	defer db.Close()
+	if _, err := db.Exec(fmt.Sprintf("UPDATE users SET expiryDate='%s', useDays=%d WHERE id=%d;", expiryDate, useDays, id)); err != nil {
+		fmt.Println(err)
+		return err
+	}
+	return nil
+}
+
+// SetSpeedLimit 设置用户限速 (KB/s, 0表示不限速)
+func (mysql *Mysql) SetSpeedLimit(id uint, speedLimit int) error {
+	db := mysql.GetDB()
+	if db == nil {
+		return errors.New("can't connect mysql")
+	}
+	defer db.Close()
+	if _, err := db.Exec(fmt.Sprintf("UPDATE users SET speedLimit=%d WHERE id=%d;", speedLimit, id)); err != nil {
 		fmt.Println(err)
 		return err
 	}
@@ -405,7 +486,7 @@ func (mysql *Mysql) GetUserByName(name string) *User {
 		return nil
 	}
 	defer db.Close()
-	user, err := queryUser(db, fmt.Sprintf("SELECT * FROM users WHERE BINARY username='%s'", name))
+	user, err := queryUser(db, fmt.Sprintf("SELECT %s FROM users WHERE BINARY username='%s'", selectUserFields, name))
 	if err != nil {
 		return nil
 	}
@@ -419,7 +500,7 @@ func (mysql *Mysql) GetUserByPass(pass string) *User {
 		return nil
 	}
 	defer db.Close()
-	user, err := queryUser(db, fmt.Sprintf("SELECT * FROM users WHERE BINARY passwordShow='%s'", pass))
+	user, err := queryUser(db, fmt.Sprintf("SELECT %s FROM users WHERE BINARY passwordShow='%s'", selectUserFields, pass))
 	if err != nil {
 		return nil
 	}
@@ -438,7 +519,7 @@ func (mysql *Mysql) PageList(curPage int, pageSize int) (*PageQuery, error) {
 	}
 	defer db.Close()
 	offset := (curPage - 1) * pageSize
-	querySQL := fmt.Sprintf("SELECT * FROM users LIMIT %d, %d", offset, pageSize)
+	querySQL := fmt.Sprintf("SELECT %s FROM users LIMIT %d, %d", selectUserFields, offset, pageSize)
 	userList, err := queryUserList(db, querySQL)
 	if err != nil {
 		fmt.Println(err)
@@ -456,7 +537,7 @@ func (mysql *Mysql) PageList(curPage int, pageSize int) (*PageQuery, error) {
 
 // GetData 获取用户记录
 func (mysql *Mysql) GetData(ids ...string) ([]*User, error) {
-	querySQL := "SELECT * FROM users"
+	querySQL := fmt.Sprintf("SELECT %s FROM users", selectUserFields)
 	db := mysql.GetDB()
 	if db == nil {
 		return nil, errors.New("连接mysql失败")
@@ -476,9 +557,10 @@ func (mysql *Mysql) GetData(ids ...string) ([]*User, error) {
 var (
 	lastTrafficLock sync.Mutex
 	lastUserTraffic = make(map[uint][2]uint64)
+	lastTrafficTime = make(map[uint]time.Time)
 )
 
-// RecordTrafficSnapshot 采样并累加计算每日与每小时流量快照
+// RecordTrafficSnapshot 采样并累加计算每日与每小时流量快照，同时更新用户速率与活跃状态
 func (mysql *Mysql) RecordTrafficSnapshot() error {
 	db := mysql.GetDB()
 	if db == nil {
@@ -486,7 +568,7 @@ func (mysql *Mysql) RecordTrafficSnapshot() error {
 	}
 	defer db.Close()
 
-	users, err := queryUserList(db, "SELECT * FROM users")
+	users, err := queryUserList(db, fmt.Sprintf("SELECT %s FROM users", selectUserFields))
 	if err != nil {
 		return err
 	}
@@ -494,16 +576,19 @@ func (mysql *Mysql) RecordTrafficSnapshot() error {
 	now := time.Now()
 	today := now.Format("2006-01-02")
 	thisHour := now.Format("2006-01-02 15:00")
+	nowStr := now.Format("2006-01-02 15:04:05")
 
 	lastTrafficLock.Lock()
 	defer lastTrafficLock.Unlock()
 
 	for _, u := range users {
 		last, exists := lastUserTraffic[u.ID]
+		lastT, tExists := lastTrafficTime[u.ID]
 		var deltaUp, deltaDown uint64
 
 		if !exists {
 			lastUserTraffic[u.ID] = [2]uint64{u.Upload, u.Download}
+			lastTrafficTime[u.ID] = now
 			deltaUp = 0
 			deltaDown = 0
 		} else {
@@ -519,6 +604,7 @@ func (mysql *Mysql) RecordTrafficSnapshot() error {
 				deltaDown = u.Download
 			}
 			lastUserTraffic[u.ID] = [2]uint64{u.Upload, u.Download}
+			lastTrafficTime[u.ID] = now
 		}
 
 		// 写入每日流量表
@@ -544,6 +630,29 @@ func (mysql *Mysql) RecordTrafficSnapshot() error {
 			total = total + %d;
 		`, u.ID, u.Username, thisHour, deltaUp, deltaDown, deltaUp+deltaDown, deltaUp, deltaDown, deltaUp+deltaDown)
 		db.Exec(queryHourly)
+
+		// 计算实时速率并记录最高上传/下载速率及最近活跃时间
+		if deltaUp > 0 || deltaDown > 0 {
+			var intervalSec int64 = 30
+			if tExists && now.Sub(lastT).Seconds() > 0 {
+				intervalSec = int64(now.Sub(lastT).Seconds())
+			}
+			if intervalSec <= 0 {
+				intervalSec = 1
+			}
+
+			curUpSpeed := deltaUp / uint64(intervalSec)
+			curDownSpeed := deltaDown / uint64(intervalSec)
+
+			updateUserSQL := fmt.Sprintf(`
+				UPDATE users SET
+				lastActiveTime = '%s',
+				peakUpSpeed = GREATEST(COALESCE(peakUpSpeed, 0), %d),
+				peakDownSpeed = GREATEST(COALESCE(peakDownSpeed, 0), %d)
+				WHERE id = %d;
+			`, nowStr, curUpSpeed, curDownSpeed, u.ID)
+			db.Exec(updateUserSQL)
+		}
 	}
 	return nil
 }

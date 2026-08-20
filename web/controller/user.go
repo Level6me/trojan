@@ -151,6 +151,34 @@ func SetExpire(id uint, useDays uint) *ResponseBody {
 	return &responseBody
 }
 
+// SetExpiryDate 直接设置用户到期日期与天数
+func SetExpiryDate(id uint, expiryDate string, useDays uint) *ResponseBody {
+	responseBody := ResponseBody{Msg: "success"}
+	defer TimeCost(time.Now(), &responseBody)
+	mysql := core.GetMysql()
+	if expiryDate == "" && useDays == 0 {
+		if err := mysql.CancelExpire(id); err != nil {
+			responseBody.Msg = err.Error()
+		}
+	} else {
+		if err := mysql.SetExpiryDate(id, expiryDate, useDays); err != nil {
+			responseBody.Msg = err.Error()
+		}
+	}
+	return &responseBody
+}
+
+// SetSpeedLimit 设置用户限速
+func SetSpeedLimit(id uint, speedLimit int) *ResponseBody {
+	responseBody := ResponseBody{Msg: "success"}
+	defer TimeCost(time.Now(), &responseBody)
+	mysql := core.GetMysql()
+	if err := mysql.SetSpeedLimit(id, speedLimit); err != nil {
+		responseBody.Msg = err.Error()
+	}
+	return &responseBody
+}
+
 // CancelExpire 取消设置用户过期
 func CancelExpire(id uint) *ResponseBody {
 	responseBody := ResponseBody{Msg: "success"}
