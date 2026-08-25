@@ -2015,6 +2015,165 @@
             } catch (e) {}
         }
 
+        // 新增用户弹窗控制
+        function openCreateUserModal() {
+            const title = document.getElementById('user-modal-title');
+            if (title) title.innerText = '➕ 新增 Trojan 用户';
+            const editId = document.getElementById('user-edit-id');
+            if (editId) editId.value = '';
+            const nameInp = document.getElementById('user-form-name');
+            if (nameInp) nameInp.value = '';
+            const passInp = document.getElementById('user-form-pass');
+            if (passInp) passInp.value = '';
+            const quotaInp = document.getElementById('user-form-quota');
+            if (quotaInp) quotaInp.value = '0';
+            const daysInp = document.getElementById('user-form-days');
+            if (daysInp) daysInp.value = '0';
+            const modal = document.getElementById('modal-user');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function generateRandomPass() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+            let pass = '';
+            for (let i = 0; i < 12; i++) {
+                pass += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            const input = document.getElementById('user-form-pass');
+            if (input) input.value = pass;
+            showToast('已生成高强度随机密码', '⚡');
+        }
+
+        async function handleSaveUser(e) {
+            e.preventDefault();
+            const username = document.getElementById('user-form-name').value.trim();
+            const password = document.getElementById('user-form-pass').value.trim();
+            const quotaGB = parseFloat(document.getElementById('user-form-quota').value) || 0;
+            const useDays = parseInt(document.getElementById('user-form-days').value) || 0;
+
+            if (!username || !password) {
+                showToast('用户名和密码不能为空', '⚠️');
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('username', username);
+                formData.append('password', password);
+
+                const res = await apiFetch('/trojan/user', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (res && (res.Msg === 'success' || res.Status === 'success')) {
+                    // 查询新用户 ID 以配置配额或有效期
+                    if (quotaGB > 0 || useDays > 0) {
+                        const usersRes = await apiFetch('/trojan/user');
+                        if (usersRes && usersRes.Data && usersRes.Data.userList) {
+                            const newUser = usersRes.Data.userList.find(u => u.Username === username);
+                            if (newUser) {
+                                if (quotaGB > 0) {
+                                    const qForm = new FormData();
+                                    qForm.append('id', newUser.ID);
+                                    qForm.append('quota', Math.round(quotaGB * 1024 * 1024 * 1024));
+                                    await apiFetch('/trojan/user/limit', { method: 'POST', body: qForm });
+                                }
+                                if (useDays > 0) {
+                                    const dForm = new FormData();
+                                    dForm.append('id', newUser.ID);
+                                    dForm.append('useDays', useDays);
+                                    await apiFetch('/trojan/user/expire', { method: 'POST', body: dForm });
+                                }
+                            }
+                        }
+                    }
+
+                    showToast(`🎉 用户【${username}】创建成功！`, '🎉');
+                    closeModals();
+                    await loadUsers();
+                    if (currentView === 'dashboard') loadDashboard();
+                } else {
+                    showToast('创建失败: ' + (res ? res.Msg : '未知错误'), '❌');
+                }
+            } catch (err) {
+                showToast('保存异常: ' + err, '❌');
+            }
+        }
+
+        // 节点与订阅下拉控制
+        function updateUserSelectOptions() {
+            const sel = document.getElementById('sub-user-select');
+            if (!sel) return;
+            const currentVal = sel.value;
+            sel.innerHTML = '';
+            if (!allUsers || allUsers.length === 0) {
+                sel.innerHTML = '<option value="">暂无可用用户</option>';
+                updateSubscriptionPreview();
+                return;
+            }
+            allUsers.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u.ID;
+                opt.textContent = `${u.Username} (${u.Password ? u.Password.slice(0, 6) + '***' : '无密码'})`;
+                sel.appendChild(opt);
+            });
+            if (currentVal && allUsers.some(u => String(u.ID) === String(currentVal))) {
+                sel.value = currentVal;
+            }
+            updateSubscriptionPreview();
+        }
+
+        function getSelectedSubscriptionUser() {
+            const sel = document.getElementById('sub-user-select');
+            if (!sel || !sel.value) return (allUsers && allUsers[0]) || null;
+            return allUsers.find(u => String(u.ID) === String(sel.value)) || (allUsers && allUsers[0]) || null;
+        }
+
+        function updateSubscriptionPreview() {
+            const user = getSelectedSubscriptionUser();
+            const preview = document.getElementById('sub-url-preview');
+            if (!user) {
+                if (preview) preview.value = '';
+                return;
+            }
+            const pass = user.Password || '';
+            const url = `trojan://${pass}@${serverDomain}:${serverPort}#${encodeURIComponent(serverDomain + '-' + user.Username)}`;
+            if (preview) preview.value = url;
+        }
+
+        function copyTrojanURL() {
+            const user = getSelectedSubscriptionUser();
+            if (!user) return showToast('请先选择用户', '⚠️');
+            const pass = user.Password || '';
+            const url = `trojan://${pass}@${serverDomain}:${serverPort}#${encodeURIComponent(serverDomain + '-' + user.Username)}`;
+            copyText(url, `已复制【${user.Username}】的 trojan:// 节点链接`);
+        }
+
+        function copyClashURL() {
+            const user = getSelectedSubscriptionUser();
+            if (!user) return showToast('请先选择用户', '⚠️');
+            const pass = user.Password || '';
+            const clashUrl = `${window.location.origin}/trojan/user/subscribe?token=${pass}`;
+            copyText(clashUrl, `已复制【${user.Username}】的 Clash 订阅链接`);
+        }
+
+        function showQRCodeModal() {
+            const user = getSelectedSubscriptionUser();
+            if (!user) return showToast('请先选择用户', '⚠️');
+            const pass = user.Password || '';
+            const url = `trojan://${pass}@${serverDomain}:${serverPort}#${encodeURIComponent(serverDomain + '-' + user.Username)}`;
+            const container = document.getElementById('qrcode-canvas-container');
+            if (container) {
+                container.innerHTML = '';
+                new QRCode(container, { text: url, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+            }
+            const lbl = document.getElementById('qrcode-username-label');
+            if (lbl) lbl.innerText = `用户: ${user.Username}`;
+            const qm = document.getElementById('modal-qrcode');
+            if (qm) qm.style.display = 'flex';
+        }
+
         // 用户管理
         async function loadUsers() {
             try {
@@ -2024,19 +2183,25 @@
                     serverDomain = res.Data.domain || window.location.hostname;
                     serverPort = res.Data.port || 4212;
 
-                    document.getElementById('node-info-domain').innerText = serverDomain;
-                    document.getElementById('node-info-port').innerText = serverPort;
-                    document.getElementById('node-port-badge').innerText = `TCP ${serverPort}`;
+                    const domDomain = document.getElementById('node-info-domain');
+                    if (domDomain) domDomain.innerText = serverDomain;
+                    const domPort = document.getElementById('node-info-port');
+                    if (domPort) domPort.innerText = serverPort;
+                    const domBadge = document.getElementById('node-port-badge');
+                    if (domBadge) domBadge.innerText = `TCP ${serverPort}`;
 
                     renderUserTable();
                     updateUserSelectOptions();
                     calculateKPIs();
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.error('loadUsers error:', e);
+            }
         }
 
         function calculateKPIs() {
-            document.getElementById('kpi-user-count').innerHTML = `${allUsers.length} <span style="font-size: 14px; color: var(--text-sec); font-weight: 500;">位</span>`;
+            const countEl = document.getElementById('kpi-user-count');
+            if (countEl) countEl.innerHTML = `${allUsers.length} <span style="font-size: 14px; color: var(--text-sec); font-weight: 500;">位</span>`;
             let totalBytes = 0;
             let totalUp = 0;
             let totalDown = 0;
@@ -2049,10 +2214,20 @@
                 if ((u.Upload || 0) + (u.Download || 0) > 0) onlineCount++;
             });
 
-            document.getElementById('kpi-traffic-total').innerHTML = `${(totalBytes / (1024*1024*1024)).toFixed(2)} <span style="font-size: 14px; color: var(--text-sec); font-weight: 500;">GB</span>`;
-            document.getElementById('kpi-traffic-sub').innerText = `↑ ${formatBytes(totalUp)} · ↓ ${formatBytes(totalDown)}`;
-            document.getElementById('kpi-online-badge').innerText = `🟢 ${onlineCount} 活跃`;
-            document.getElementById('kpi-user-active').innerText = `活跃用户: ${allUsers.length ? Math.round((onlineCount/allUsers.length)*100) : 0}%`;
+            const trafficEl = document.getElementById('kpi-traffic-total');
+            if (trafficEl) {
+                if (totalBytes >= (1024 * 1024 * 1024 * 1024)) {
+                    trafficEl.innerHTML = `${(totalBytes / (1024*1024*1024*1024)).toFixed(2)} <span style="font-size: 14px; color: var(--text-sec); font-weight: 500;">TB</span>`;
+                } else {
+                    trafficEl.innerHTML = `${(totalBytes / (1024*1024*1024)).toFixed(2)} <span style="font-size: 14px; color: var(--text-sec); font-weight: 500;">GB</span>`;
+                }
+            }
+            const subEl = document.getElementById('kpi-traffic-sub');
+            if (subEl) subEl.innerText = `↑ ${formatBytes(totalUp)} · ↓ ${formatBytes(totalDown)}`;
+            const badgeEl = document.getElementById('kpi-online-badge');
+            if (badgeEl) badgeEl.innerText = `🟢 ${onlineCount} 活跃`;
+            const actEl = document.getElementById('kpi-user-active');
+            if (actEl) actEl.innerText = `活跃用户: ${allUsers.length ? Math.round((onlineCount/allUsers.length)*100) : 0}%`;
         }
 
         function renderUserTable() {
