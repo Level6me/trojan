@@ -187,12 +187,16 @@ func Auth(r *gin.Engine, timeout int) *jwt.GinJWTMiddleware {
 		c.JSON(404, gin.H{"code": 404, "message": "Page not found"})
 	})
 	r.GET("/auth/check", func(c *gin.Context) {
-		result, _ := core.GetValue("admin_pass")
+		result, err := core.GetValue("admin_pass")
+		if err != nil && result == "" {
+			c.JSON(500, gin.H{"code": 500, "message": "系统安全存储读取中，请刷新重试"})
+			return
+		}
 		if result == "" {
 			c.JSON(201, newInstall)
 		} else {
 			title, err := core.GetValue("login_title")
-			if err != nil {
+			if err != nil || title == "" {
 				title = "trojan 管理平台"
 			}
 			c.JSON(200, gin.H{
