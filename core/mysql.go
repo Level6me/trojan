@@ -134,6 +134,9 @@ CREATE TABLE IF NOT EXISTS user_traffic_hourly (
 
 // GetDB 获取mysql数据库连接
 func (mysql *Mysql) GetDB() *sql.DB {
+	if mysql == nil || mysql.ServerAddr == "" {
+		return nil
+	}
 	// 屏蔽mysql驱动包的日志输出
 	mysqlDriver.SetLogger(log.New(io.Discard, "", 0))
 	conn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mysql.Username, mysql.Password, mysql.ServerAddr, mysql.ServerPort, mysql.Database)

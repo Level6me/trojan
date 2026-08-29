@@ -73,7 +73,11 @@ func GetConfig() *ServerConfig {
 
 // GetMysql 获取mysql连接
 func GetMysql() *Mysql {
-	return &GetConfig().Mysql
+	cfg := GetConfig()
+	if cfg == nil {
+		return &Mysql{}
+	}
+	return &cfg.Mysql
 }
 
 // WriteMysql 写mysql配置
