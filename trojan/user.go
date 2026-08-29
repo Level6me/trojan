@@ -169,13 +169,10 @@ func UserList(ids ...string) []*core.User {
 	}
 	domain, port := GetDomainAndPort()
 	for i, k := range userList {
-		pass, err := base64.StdEncoding.DecodeString(k.Password)
-		if err != nil {
-			pass = []byte("")
-		}
+		pass := k.Password
 		fmt.Printf("%d.\n", i+1)
 		fmt.Println("用户名: " + k.Username)
-		fmt.Println("密码: " + string(pass))
+		fmt.Println("密码: " + pass)
 		fmt.Println("上传流量: " + util.Cyan(util.Bytefmt(k.Upload)))
 		fmt.Println("下载流量: " + util.Cyan(util.Bytefmt(k.Download)))
 		if k.Quota < 0 {
@@ -189,7 +186,7 @@ func UserList(ids ...string) []*core.User {
 			fmt.Println("到期日期: " + util.Cyan(k.ExpiryDate))
 		}
 		remark := url.QueryEscape(fmt.Sprintf("%s:%d", domain, port))
-		fmt.Println("分享链接: " + util.Green(fmt.Sprintf("trojan://%s@%s:%d#%s", string(pass), domain, port, remark)))
+		fmt.Println("分享链接: " + util.Green(fmt.Sprintf("trojan://%s@%s:%d#%s", pass, domain, port, remark)))
 		fmt.Println()
 	}
 	return userList

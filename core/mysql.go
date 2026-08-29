@@ -3,6 +3,7 @@ package core
 import (
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	mysqlDriver "github.com/go-sql-driver/mysql"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	// mysql sql驱动
 	_ "github.com/go-sql-driver/mysql"
@@ -174,6 +176,26 @@ func (mysql *Mysql) CreateTable() {
 
 const selectUserFields = "id, username, password, passwordShow, quota, download, upload, useDays, expiryDate, COALESCE(speedLimit, 0), COALESCE(lastActiveTime, ''), COALESCE(lastIP, ''), COALESCE(peakDownSpeed, 0), COALESCE(peakUpSpeed, 0)"
 
+func decodePassShow(passShow string) string {
+	if passShow == "" {
+		return ""
+	}
+	dec, err := base64.StdEncoding.DecodeString(passShow)
+	if err == nil && len(dec) > 0 && utf8.Valid(dec) {
+		isPrintable := true
+		for _, r := range string(dec) {
+			if r < 32 && r != '\t' && r != '\n' && r != '\r' {
+				isPrintable = false
+				break
+			}
+		}
+		if isPrintable {
+			return string(dec)
+		}
+	}
+	return passShow
+}
+
 func queryUserList(db *sql.DB, sql string) ([]*User, error) {
 	var (
 		username       string
@@ -204,7 +226,7 @@ func queryUserList(db *sql.DB, sql string) ([]*User, error) {
 		userList = append(userList, &User{
 			ID:             id,
 			Username:       username,
-			Password:       passShow,
+			Password:       decodePassShow(passShow),
 			EncryptPass:    encryptPass,
 			Download:       download,
 			Upload:         upload,
@@ -245,7 +267,7 @@ func queryUser(db *sql.DB, sql string) (*User, error) {
 	return &User{
 		ID:             id,
 		Username:       username,
-		Password:       passShow,
+		Password:       decodePassShow(passShow),
 		EncryptPass:    encryptPass,
 		Download:       download,
 		Upload:         upload,
@@ -529,14 +551,15 @@ func (mysql *Mysql) GetUserByName(name string) *User {
 	return user
 }
 
-// GetUserByPass 通过密码来获取用户
+// GetUserByPass 通过密码来获取用户 (支持明文或 Base64 匹配)
 func (mysql *Mysql) GetUserByPass(pass string) *User {
 	db := mysql.GetDB()
 	if db == nil {
 		return nil
 	}
 	defer db.Close()
-	user, err := queryUser(db, fmt.Sprintf("SELECT %s FROM users WHERE BINARY passwordShow='%s'", selectUserFields, pass))
+	base64Pass := base64.StdEncoding.EncodeToString([]byte(pass))
+	user, err := queryUser(db, fmt.Sprintf("SELECT %s FROM users WHERE BINARY passwordShow='%s' OR BINARY passwordShow='%s'", selectUserFields, base64Pass, pass))
 	if err != nil {
 		return nil
 	}

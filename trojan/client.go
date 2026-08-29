@@ -30,12 +30,7 @@ func GenClientJson() {
 		}
 		user = *userList[choice-1]
 	}
-	pass, err := base64.StdEncoding.DecodeString(user.Password)
-	if err != nil {
-		fmt.Println(util.Red("Base64解码失败: " + err.Error()))
-		return
-	}
-	if !core.WriteClient(port, string(pass), domain, clientPath) {
+	if !core.WriteClient(port, user.Password, domain, clientPath) {
 		fmt.Println(util.Red("生成配置文件失败!"))
 	} else {
 		fmt.Println("成功生成配置文件: " + util.Green(clientPath))

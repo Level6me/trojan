@@ -354,11 +354,7 @@ func ExportCsv(c *gin.Context) *ResponseBody {
 		"最高上传速率(B/s)",
 	})
 	for _, user := range userList {
-		pass, _ := base64.StdEncoding.DecodeString(user.Password)
-		plainPass := string(pass)
-		if plainPass == "" {
-			plainPass = user.Password
-		}
+		plainPass := user.Password
 		singleUser := []string{
 			strconv.Itoa(int(user.ID)),
 			user.Username,

@@ -2154,7 +2154,13 @@
             const user = getSelectedSubscriptionUser();
             if (!user) return showToast('请先选择用户', '⚠️');
             const pass = user.Password || '';
-            const clashUrl = `${window.location.origin}/trojan/user/subscribe?token=${pass}`;
+            let token = pass;
+            try {
+                token = btoa(unescape(encodeURIComponent(JSON.stringify({ user: user.Username, pass: pass }))));
+            } catch (e) {
+                token = pass;
+            }
+            const clashUrl = `${window.location.origin}/trojan/user/subscribe?token=${encodeURIComponent(token)}`;
             copyText(clashUrl, `已复制【${user.Username}】的 Clash 订阅链接`);
         }
 

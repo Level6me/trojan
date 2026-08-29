@@ -75,16 +75,12 @@ func CreateUser(username string, password string) *ResponseBody {
 		responseBody.Msg = "已存在用户名为: " + username + " 的用户!"
 		return &responseBody
 	}
-	pass, err := base64.StdEncoding.DecodeString(password)
-	if err != nil {
-		responseBody.Msg = "Base64解码失败: " + err.Error()
-		return &responseBody
-	}
+	base64Pass := base64.StdEncoding.EncodeToString([]byte(password))
 	if user := mysql.GetUserByPass(password); user != nil {
-		responseBody.Msg = "已存在密码为: " + string(pass) + " 的用户!"
+		responseBody.Msg = "已存在密码为: " + password + " 的用户!"
 		return &responseBody
 	}
-	if err := mysql.CreateUser(username, password, string(pass)); err != nil {
+	if err := mysql.CreateUser(username, base64Pass, password); err != nil {
 		responseBody.Msg = err.Error()
 	}
 	return &responseBody
@@ -110,18 +106,14 @@ func UpdateUser(id uint, username string, password string) *ResponseBody {
 			return &responseBody
 		}
 	}
-	pass, err := base64.StdEncoding.DecodeString(password)
-	if err != nil {
-		responseBody.Msg = "Base64解码失败: " + err.Error()
-		return &responseBody
-	}
+	base64Pass := base64.StdEncoding.EncodeToString([]byte(password))
 	if userList[0].Password != password {
 		if user := mysql.GetUserByPass(password); user != nil {
-			responseBody.Msg = "已存在密码为: " + string(pass) + " 的用户!"
+			responseBody.Msg = "已存在密码为: " + password + " 的用户!"
 			return &responseBody
 		}
 	}
-	if err := mysql.UpdateUser(id, username, password, string(pass)); err != nil {
+	if err := mysql.UpdateUser(id, username, base64Pass, password); err != nil {
 		responseBody.Msg = err.Error()
 	}
 	return &responseBody
@@ -197,23 +189,24 @@ func ClashSubInfo(c *gin.Context) {
 		c.String(200, "token is null")
 		return
 	}
+	var username, password string
 	decodeByte, err := base64.StdEncoding.DecodeString(token)
-	if err != nil {
-		c.String(200, "token is error")
-		return
+	if err == nil && gjson.GetBytes(decodeByte, "user").Exists() && gjson.GetBytes(decodeByte, "pass").Exists() {
+		username = gjson.GetBytes(decodeByte, "user").String()
+		password = gjson.GetBytes(decodeByte, "pass").String()
+	} else {
+		password = token
 	}
-	if !gjson.GetBytes(decodeByte, "user").Exists() || !gjson.GetBytes(decodeByte, "pass").Exists() {
-		c.String(200, "token is error")
-		return
-	}
-	username := gjson.GetBytes(decodeByte, "user").String()
-	password := gjson.GetBytes(decodeByte, "pass").String()
 
 	mysql := core.GetMysql()
-	user := mysql.GetUserByName(username)
+	var user *core.User
+	if username != "" {
+		user = mysql.GetUserByName(username)
+	} else {
+		user = mysql.GetUserByPass(password)
+	}
 	if user != nil {
-		pass, _ := base64.StdEncoding.DecodeString(user.Password)
-		if password == string(pass) {
+		if password == user.Password || (username == "" && user.Password != "") {
 			var wsData, wsHost string
 			userInfo := fmt.Sprintf("upload=%d, download=%d", user.Upload, user.Download)
 			if user.Quota != -1 {
@@ -241,7 +234,7 @@ func ClashSubInfo(c *gin.Context) {
 				wsData = fmt.Sprintf(", network: ws, udp: true, ws-opts: %s", wsOpt)
 			}
 			proxyData := fmt.Sprintf("  - {name: %s, server: %s, port: %d, type: trojan, password: %s, sni: %s%s}",
-				name, domain, port, password, domain, wsData)
+				name, domain, port, user.Password, domain, wsData)
 			result := fmt.Sprintf(`proxies:
 %s
 
