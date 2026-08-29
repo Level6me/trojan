@@ -35,8 +35,8 @@ go_version=`go version|awk '{print $3,$4}'`
 git_version=`git rev-parse HEAD`
 ldflags="-w -s -X 'trojan/trojan.MVersion=$version' -X 'trojan/trojan.BuildDate=$now' -X 'trojan/trojan.GoVersion=$go_version' -X 'trojan/trojan.GitVersion=$git_version'"
 
-GOOS=linux GOARCH=amd64 go build -ldflags "$ldflags" -o "result/trojan-linux-amd64" .
-GOOS=linux GOARCH=arm64 go build -ldflags "$ldflags" -o "result/trojan-linux-arm64" .
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$ldflags -extldflags '-static'" -o "result/trojan-linux-amd64" .
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$ldflags -extldflags '-static'" -o "result/trojan-linux-arm64" .
 
 if [[ $# == 0 ]];then
 	cd result
