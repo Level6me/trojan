@@ -1,7 +1,6 @@
 package trojan
 
 import (
-	"encoding/base64"
 	"fmt"
 	"trojan/core"
 	"trojan/util"
